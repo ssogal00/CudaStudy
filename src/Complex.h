@@ -4,18 +4,29 @@
 #include <xmmintrin.h>
 #include <iostream>
 
+class Complex8
+{
+public:
+	__m512 mValue;
+};
+
+// can hold 4 complex numbers
 class Complex4
 {
 public:
+	Complex4(__m256 InValue) : mValue(InValue)
+	{ 
+	}
 
 	Complex4(float real0, float imag0, float real1, float imag1, float real2, float imag2, float real3, float imag3)
 	{
 		mValue = _mm256_set_ps(imag3, real3, imag2, real2, imag1, real1, imag0, real0);
 	}
+
 	__m256 mValue;
 };
 
-
+// can hold 2 complex numbers
 class Complex2
 {
 public:
