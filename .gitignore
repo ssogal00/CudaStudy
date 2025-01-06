@@ -364,3 +364,4 @@ FodyWeavers.xsd
 
 # build directory
 build/
+cudaStudyBuild/
