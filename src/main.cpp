@@ -7,7 +7,10 @@
 #include <cmath>
 #include <complex>
 
-std::complex<double> c(-0.7, 0.27015);  // You can change this constant to get different Julia sets
+std::complex<double> c(-0.29609091, 0.62491);  // You can change this constant to get different Julia sets
+std::complex<double> dest(-0.20509091, 0.71591);
+
+Complex8 C(-0.29609091f, 0.62491f);
 
 const int WIDTH = 640;
 const int HEIGHT = 480;
@@ -28,6 +31,21 @@ uint32_t julia(double x, double y)
     if (iterations == MAX_ITERATIONS) return 0;
 
     return static_cast<uint32_t>(iterations * 255 / MAX_ITERATIONS);
+}
+
+__m256 juliaSimd(const Complex8& A)
+{
+    for (int i = 0; i < MAX_ITERATIONS; ++i)
+    {
+        Complex8 Z = A * A + C;
+
+		__m256 SquaredLength = Z.CalcSquaredLength();  // 8 float
+		__m256 Length = _mm256_set1_ps(4.0f); // 8 float
+		// If the length of Z is greater than 2
+
+		__m256 Mask = _mm256_cmp_ps(SquaredLength, Length, _CMP_LT_OQ); // 8 float
+
+    }
 }
 
 void renderJuliaSet(SDL_Renderer* renderer) 

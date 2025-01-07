@@ -13,6 +13,14 @@ public:
 	{
 	}
 
+	Complex8(float real0, float imag0)
+	{
+		mValue = _mm512_set_ps(
+			imag0, real0, imag0, real0 , imag0, real0, imag0, real0,
+			imag0, real0, imag0, real0, imag0, real0, imag0, real0);
+
+	}
+
 	Complex8(float real0, float imag0, float real1, float imag1, float real2, float imag2, float real3, float imag3, float real4, float imag4, float real5, float imag5, float real6, float imag6, float real7, float imag7)
 	{
 		mValue = _mm512_set_ps(imag7, real7, imag6, real6, imag5, real5, imag4, real4, imag3, real3, imag2, real2, imag1, real1, imag0, real0);
