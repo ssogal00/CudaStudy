@@ -17,6 +17,9 @@ public:
 	{
 		mValue = _mm512_set_ps(imag7, real7, imag6, real6, imag5, real5, imag4, real4, imag3, real3, imag2, real2, imag1, real1, imag0, real0);
 	}
+
+
+	__m256 CalcSquaredLength();
 };
 
 // can hold 4 complex numbers
@@ -68,3 +71,5 @@ void PrintM256(__m256 InValue);
 
 Complex2 operator*(const Complex2& A, const Complex2& B);
 Complex4 operator*(const Complex4& A, const Complex4& B);
+Complex8 operator*(const Complex8& A, const Complex8& B);
+Complex8 operator+(const Complex8& A, const Complex8& B);
