@@ -8,19 +8,19 @@
 #include <complex>
 #include <thread>
 
-std::complex<double> c(-0.29609091, 0.62491);  // You can change this constant to get different Julia sets
-std::complex<double> dest(-0.20509091, 0.71591);
+std::complex<float> c(-0.29609091, 0.62491);  // You can change this constant to get different Julia sets
+std::complex<float> dest(-0.20509091, 0.71591);
 
 Complex8 C(-0.29609091f, 0.62491f);
 
-const int WIDTH = 640;
-const int HEIGHT = 480;
+const int WIDTH = 1280;
+const int HEIGHT = 960;
 
 const int MAX_ITERATIONS = 75;
 
-uint32_t julia(double x, double y) 
+uint32_t julia(float x, float y) 
 {
-    std::complex<double> z(x, y);
+    std::complex<float> z(x, y);
     int iterations = 0;
 
     while (std::abs(z) < 2 && iterations < MAX_ITERATIONS) 
@@ -50,18 +50,13 @@ __m256 juliaSimd(Complex8& A)
 	{
 		return IterationsUntilDiverge;
 	}
-
-
-	__m256i NotAlreadyDiverged = _mm256_set1_epi32(0xFFFFFFFF);
+    __m256i NotAlreadyDiverged = _mm256_set1_epi32(0xFFFFFFFF);
 	__m256i DivergedInThePast = _mm256_set1_epi32(0x0);
 
     // early out 
-
-
     for (int i = 0; i < MAX_ITERATIONS; ++i)
     {
         Z = Z * Z + C;
-
 		__m256 SquaredLength = Z.CalcSquaredLength();  // 8 float
 		__m256 Length = _mm256_set1_ps(4.0f); // 8 float
 		__m256 Diverging = _mm256_cmp_ps(SquaredLength, Length, _CMP_GT_OQ); // 8 float
@@ -84,8 +79,8 @@ void renderJuliaSet(SDL_Renderer* renderer)
     {
         for (int x = 0; x < WIDTH; ++x) 
         {
-            double real = (x - WIDTH / 2.0) * 4.0 / WIDTH;
-            double imag = (y - HEIGHT / 2.0) * 4.0 / HEIGHT;
+            float real = (x - WIDTH / 2.0) * 4.0 / WIDTH;
+            float imag = (y - HEIGHT / 2.0) * 4.0 / HEIGHT;
 
             uint32_t color = julia(real, imag);
 
@@ -102,7 +97,6 @@ void renderJuliaSetSimd(SDL_Renderer* renderer)
     {
         for (int x = 0; x < WIDTH; x += 8)
         {
-           
             float real0 = (x - WIDTH / 2.0) * 4.0 / WIDTH;
             float real1 = (x+1 - WIDTH / 2.0) * 4.0 / WIDTH;
             float real2 = (x+2 - WIDTH / 2.0) * 4.0 / WIDTH;
@@ -124,7 +118,7 @@ void renderJuliaSetSimd(SDL_Renderer* renderer)
             
             for (int i = 0; i < 8; i++)
             {
-                float* p = (float*)&Color;
+                float* p = ((float*)&Color);
                 SDL_SetRenderDrawColor(renderer, static_cast<uint32_t>(p[i]), static_cast<uint32_t>(p[i]), static_cast<uint32_t>(p[i]), 255);
                 //SDL_SetRenderDrawColor(renderer, static_cast<uint32_t>(0), static_cast<uint32_t>(0), static_cast<uint32_t>(0), 255);
                 SDL_RenderDrawPoint(renderer, x+i, y);
@@ -136,43 +130,6 @@ void renderJuliaSetSimd(SDL_Renderer* renderer)
 
 int main() 
 {
-	Complex4 a(1, 2, 3, 4, 1,2,3,4);
-
-    Complex4 b(1, 2, 3, 4, 1, 2, 3, 4);
-
-	Complex4 c = a * b;
-
-	Complex8 d(1, 2, 3, 4, 
-        5,6,7,8,
-        9,10,11,12,
-        13,14,15,16);
-
-    PrintM256( d.CalcSquaredLength());
-
-    __m256 A = _mm256_set_ps(1,2,3,4,5,6,7,8); // 8 float
-    __m256 B = _mm256_set1_ps(4);
-
-	__m256 C = _mm256_cmp_ps(A, B, _CMP_LT_OQ); 
-
-	PrintM256(c.mValue);
-
-    /*const int arraySize = 5;
-    const int a[arraySize] = { 1, 2, 3, 4, 5 };
-    const int b[arraySize] = { 10, 20, 30, 40, 50 };
-    int c[arraySize] = { 0 };
-
-    add_arrays(a, b, c, arraySize);
-
-    std::cout << "Result: ";
-    for (int i = 0; i < arraySize; ++i) {
-        std::cout << c[i] << " ";
-    }
-    std::cout << std::endl;
-
-    SDL_Init(SDL_INIT_VIDEO);
-    while (1) {}
-    SDL_Quit();
-    */
 
     // SDL 초기화
     if (SDL_Init(SDL_INIT_VIDEO) < 0) 
@@ -186,8 +143,8 @@ int main()
         "SDL2 Window",                  // 윈도우 제목
         SDL_WINDOWPOS_UNDEFINED,        // 윈도우 x 위치
         SDL_WINDOWPOS_UNDEFINED,        // 윈도우 y 위치
-        640,                            // 윈도우 너비
-        480,                            // 윈도우 높이
+        WIDTH,                            // 윈도우 너비
+        HEIGHT,                            // 윈도우 높이
         SDL_WINDOW_SHOWN                // 윈도우 플래그
     );
 
@@ -221,9 +178,20 @@ int main()
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         SDL_RenderClear(renderer);
 
+        auto start = std::chrono::steady_clock::now();
+
         //renderJuliaSet(renderer);
-		renderJuliaSetSimd(renderer);
-		std::this_thread::sleep_for(std::chrono::milliseconds(16));
+	    renderJuliaSetSimd(renderer);
+
+        auto end = std::chrono::steady_clock::now();
+
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+
+		std::cout << "Julia set rendered in " << duration << " ms\n" << std::endl;
+
+		
+        C = C + Complex8(0.001f, 0.001f);
+		c = c + std::complex<float>(0.001, 0.001);
 
         SDL_RenderPresent(renderer);
     }
