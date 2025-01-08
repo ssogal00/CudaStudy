@@ -26,6 +26,8 @@ public:
 		mValue = _mm512_set_ps(imag7, real7, imag6, real6, imag5, real5, imag4, real4, imag3, real3, imag2, real2, imag1, real1, imag0, real0);
 	}
 
+	void MaskZeroPairs(__m256i mask);
+
 
 	__m256 CalcSquaredLength();
 };

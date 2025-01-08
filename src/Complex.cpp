@@ -24,13 +24,13 @@ __m256 Complex8::CalcSquaredLength()
 {
 	__m512 Squared = _mm512_mul_ps(mValue, mValue);
 
-	__m256 low = _mm512_extractf32x8_ps(Squared, 0);
-	__m256 high = _mm512_extractf32x8_ps(Squared, 1);
+	__m256 even = _mm512_castps512_ps256(_mm512_maskz_compress_ps(0x5555, Squared));
 
-	__m256 sum_low = _mm256_hadd_ps(low, low);
-	__m256 sum_high = _mm256_hadd_ps(high, high);
+	__m256 odd = _mm512_castps512_ps256(_mm512_maskz_compress_ps(0xAAAA, Squared));
 
-	return _mm256_blend_ps(sum_low, sum_high, 0xF0);
+	__m256 sum = _mm256_add_ps(even, odd);
+
+	return sum;
 }
 
 
@@ -69,6 +69,21 @@ Complex8 operator*(const Complex8& A, const Complex8& B)
 	__m512 AImagMulBSwap = _mm512_mul_ps(AImag, BSwap);
 
 	return Complex8{ _mm512_fmaddsub_ps(AReal, B.mValue, AImagMulBSwap) };
+}
+
+
+void Complex8::MaskZeroPairs(__m256i mask)
+{
+	__m512i expanded_mask = _mm512_cvtepi32_epi64(mask);
+
+	expanded_mask = _mm512_permutexvar_epi64(_mm512_set_epi64(7, 7, 6, 6, 5, 5, 4, 4), expanded_mask);
+
+	// float를 int로 재해석하여 마스킹 연산을 수행합니다
+	__m512i src_as_int = _mm512_castps_si512(mValue);
+	__m512i masked = _mm512_andnot_si512(expanded_mask, src_as_int);
+
+	// 결과를 다시 float로 변환합니다
+	mValue = _mm512_castsi512_ps(masked);
 }
 
 Complex8 operator+(const Complex8& A, const Complex8& B)
