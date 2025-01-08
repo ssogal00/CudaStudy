@@ -46,13 +46,14 @@ __m256 juliaSimd(Complex8& A)
     // early out 
     for (int i = 0; i < MAX_ITERATIONS; ++i)
     {
-
 		__m256 SquaredLength = Z.CalcSquaredLength();  // 8 float
 		__m256 Length = _mm256_set1_ps(4.0f); // 8 float
 		__m256 Diverging = _mm256_cmp_ps(SquaredLength, Length, _CMP_GT_OQ); // 8 float
 
         if (_mm256_testc_ps(Diverging, all_ones) == 1)
         {
+            __m256i DivergingNow = _mm256_and_si256(NotAlreadyDiverged, _mm256_castps_si256(Diverging)); // 8 int
+            _mm256_maskstore_ps((float*)&IterationsUntilDiverge, DivergingNow, _mm256_set1_ps(i)); // 8 float
             return IterationsUntilDiverge;
         }
 
@@ -64,7 +65,7 @@ __m256 juliaSimd(Complex8& A)
 		NotAlreadyDiverged = _mm256_andnot_si256(DivergingNow, NotAlreadyDiverged); // 8 int
 		DivergedInThePast = _mm256_or_si256(DivergedInThePast, DivergingNow); // 8 int
 
-        Z.MaskZeroPairs(DivergedInThePast);
+        //Z.MaskZeroPairs(DivergedInThePast);
     }
 
 	return IterationsUntilDiverge;
@@ -177,7 +178,6 @@ int main()
 
         auto start = std::chrono::steady_clock::now();
 
-        //renderJuliaSet(renderer);
 	    renderJuliaSetSimd(renderer);
 
         auto end = std::chrono::steady_clock::now();
