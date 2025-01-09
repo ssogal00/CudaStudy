@@ -13,8 +13,8 @@ std::complex<float> dest(-0.20509091, 0.71591);
 
 Complex8 C(-0.29609091f, 0.62491f);
 
-const int WIDTH = 640;
-const int HEIGHT = 480;
+const int WIDTH = 960;
+const int HEIGHT = 720;
 
 const int MAX_ITERATIONS = 75;
 
@@ -71,7 +71,7 @@ __m256 juliaSimd(Complex8& A)
 	return IterationsUntilDiverge;
 
 }
-
+// normal 
 void renderJuliaSet(SDL_Renderer* renderer) 
 {
     for (int y = 0; y < HEIGHT; ++y) 
@@ -89,7 +89,8 @@ void renderJuliaSet(SDL_Renderer* renderer)
         }
     }
 }
-
+// simd version
+// simultaneous 8 pixels
 void renderJuliaSetSimd(SDL_Renderer* renderer)
 {
     for (int y = 0; y < HEIGHT; ++y)
@@ -122,6 +123,23 @@ void renderJuliaSetSimd(SDL_Renderer* renderer)
             }
         }
     }
+}
+
+
+void renderJuliaSetWithCuda(SDL_Renderer* renderer, uint32_t* pixels)
+{
+
+	renderJuliaSetCuda(pixels, WIDTH, HEIGHT, c.real(), c.imag(), MAX_ITERATIONS);
+    
+	for (int y = 0; y < HEIGHT; ++y)
+	{
+		for (int x = 0; x < WIDTH; ++x)
+		{
+			uint32_t color = pixels[y * WIDTH + x];
+			SDL_SetRenderDrawColor(renderer, color, color, color, 255);
+			SDL_RenderDrawPoint(renderer, x, y);
+		}
+	}
 }
 
 
@@ -165,6 +183,8 @@ int main()
     bool quit = false;
     SDL_Event event;
 
+	uint32_t* pixels = new uint32_t[WIDTH * HEIGHT];
+
     while (!quit) {
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT) {
@@ -177,7 +197,10 @@ int main()
 
         auto start = std::chrono::steady_clock::now();
 
-	    renderJuliaSetSimd(renderer);
+		//renderJuliaSet(renderer);
+        //renderJuliaSetSimd(renderer);
+		renderJuliaSetWithCuda(renderer, pixels);
+	    
 
         auto end = std::chrono::steady_clock::now();
 
