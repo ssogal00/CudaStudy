@@ -71,6 +71,17 @@ Complex8 operator*(const Complex8& A, const Complex8& B)
 	return Complex8{ _mm512_fmaddsub_ps(AReal, B.mValue, AImagMulBSwap) };
 }
 
+Complex8 MaskedMultiply(const Complex8& A, const Complex8& B, unsigned int mask)
+{
+	__m512 BSwap = _mm512_shuffle_ps(B.mValue, B.mValue, _MM_SHUFFLE(2, 3, 0, 1));
+	__m512 AImag = _mm512_shuffle_ps(A.mValue, A.mValue, _MM_SHUFFLE(3, 3, 1, 1));
+	__m512 AReal = _mm512_shuffle_ps(A.mValue, A.mValue, _MM_SHUFFLE(2, 2, 0, 0));
+	
+	__m512 AImagMulBSwap = _mm512_mask_mul_ps(AImag, mask, AImag, BSwap);
+
+	return Complex8{ _mm512_mask_fmaddsub_ps(AReal, mask, B.mValue, AImagMulBSwap)};
+}
+
 
 void Complex8::MaskZeroPairs(__m256i mask)
 {

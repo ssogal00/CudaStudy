@@ -56,7 +56,7 @@ __m256 juliaSimd(Complex8& A)
             _mm256_maskstore_ps((float*)&IterationsUntilDiverge, DivergingNow, _mm256_set1_ps(i)); // 8 float
             return IterationsUntilDiverge;
         }
-
+        
         Z = Z * Z + C;
 
 		__m256i DivergingNow = _mm256_and_si256(NotAlreadyDiverged, _mm256_castps_si256(Diverging)); // 8 int
@@ -69,6 +69,7 @@ __m256 juliaSimd(Complex8& A)
     }
 
 	return IterationsUntilDiverge;
+
 }
 
 void renderJuliaSet(SDL_Renderer* renderer) 
@@ -111,14 +112,12 @@ void renderJuliaSetSimd(SDL_Renderer* renderer)
 
             __m256 Color = juliaSimd(A);
 
-			Color = _mm256_mul_ps(Color, _mm256_set1_ps(255.0f));
-			Color = _mm256_div_ps(Color, _mm256_set1_ps(MAX_ITERATIONS));
+			Color = _mm256_mul_ps(Color, _mm256_set1_ps(255.0f/MAX_ITERATIONS));
             
             for (int i = 0; i < 8; i++)
             {
                 float* p = ((float*)&Color);
                 SDL_SetRenderDrawColor(renderer, static_cast<uint32_t>(p[i]), static_cast<uint32_t>(p[i]), static_cast<uint32_t>(p[i]), 255);
-                //SDL_SetRenderDrawColor(renderer, static_cast<uint32_t>(0), static_cast<uint32_t>(0), static_cast<uint32_t>(0), 255);
                 SDL_RenderDrawPoint(renderer, x+i, y);
             }
         }

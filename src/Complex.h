@@ -83,3 +83,5 @@ Complex2 operator*(const Complex2& A, const Complex2& B);
 Complex4 operator*(const Complex4& A, const Complex4& B);
 Complex8 operator*(const Complex8& A, const Complex8& B);
 Complex8 operator+(const Complex8& A, const Complex8& B);
+
+Complex8 MaskedMultiply(const Complex8& A, const Complex8& B, unsigned int mask);
