@@ -9,13 +9,17 @@ set(SDL2_USE_STATIC_LIBS ON)
 find_package(CUDA REQUIRED)
 find_package(SDL2 REQUIRED)
 
+file(GLOB SOURCES "src/*.cpp")
+file(GLOB CUFILES "src/*.cu" "src/*.cuh")
+file(GLOB HEADERS "src/*.h")
+
+
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include ${SDL2_INCLUDE_DIRS})
 
-add_executable(CudaApp
-    src/Complex.h
-    src/Complex.cpp
-    src/main.cpp
-    src/cuda_kernel.cu
+add_executable(CudaApp 
+	${SOURCES}
+	${HEADERS}
+	${CUFILES}
 )
 
 set_target_properties(CudaApp PROPERTIES

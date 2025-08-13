@@ -3,6 +3,7 @@
 #include <iostream>
 #include "cuda_kernel.cuh"
 #include "SDL2/SDL.h"
+#include "SDL2/SDL_render.h"
 #include "Complex.h"
 #include <cmath>
 #include <complex>
@@ -13,8 +14,8 @@ std::complex<float> dest(-0.20509091, 0.71591);
 
 Complex8 C(-0.29609091f, 0.62491f);
 
-const int WIDTH = 960;
-const int HEIGHT = 720;
+const int WIDTH = 512;
+const int HEIGHT = 512;
 
 const int MAX_ITERATIONS = 75;
 
@@ -34,6 +35,36 @@ uint32_t julia(float x, float y)
     return static_cast<uint32_t>(iterations * 255 / MAX_ITERATIONS);
 }
 
+__m256 juliaSimd2(Complex8& A)
+{
+
+    Complex8 Z = A;
+    __m256i NotAlreadyDiverged = _mm256_set1_epi32(0xFFFFFFFF);
+    alignas(32) float iterationsArray[8] = { 0 };
+    __m256 IterationsUntilDiverge = _mm256_load_ps(iterationsArray);
+
+    for (int i = 0; i < MAX_ITERATIONS; ++i)
+    {
+        __m256 SquaredLength = Z.CalcSquaredLength();
+        __m256 Diverging = _mm256_cmp_ps(SquaredLength, _mm256_set1_ps(4.0f), _CMP_GT_OQ);
+
+        __m256i DivergingNow = _mm256_and_si256(NotAlreadyDiverged, _mm256_castps_si256(Diverging));
+        _mm256_maskstore_ps(iterationsArray, DivergingNow, _mm256_set1_ps(static_cast<float>(i)));
+
+        NotAlreadyDiverged = _mm256_andnot_si256(DivergingNow, NotAlreadyDiverged);
+
+        if (_mm256_testz_si256(NotAlreadyDiverged, NotAlreadyDiverged))
+            break;
+
+        Z = Z * Z + C;
+    }
+
+    return _mm256_load_ps(iterationsArray);
+
+}
+
+
+#pragma optimize("", off)  
 __m256 juliaSimd(Complex8& A)
 {
     Complex8 Z = A;
@@ -71,6 +102,7 @@ __m256 juliaSimd(Complex8& A)
 	return IterationsUntilDiverge;
 
 }
+#pragma optimize("", on)  
 // normal 
 void renderJuliaSet(SDL_Renderer* renderer) 
 {
@@ -111,7 +143,7 @@ void renderJuliaSetSimd(SDL_Renderer* renderer)
 
             Complex8 A{ real0, imag, real1, imag, real2, imag, real3, imag, real4, imag, real5, imag, real6, imag, real7, imag };
 
-            __m256 Color = juliaSimd(A);
+            __m256 Color = juliaSimd2(A);
 
 			Color = _mm256_mul_ps(Color, _mm256_set1_ps(255.0f/MAX_ITERATIONS));
             
@@ -142,10 +174,27 @@ void renderJuliaSetWithCuda(SDL_Renderer* renderer, uint32_t* pixels)
 	}
 }
 
+void render(SDL_Renderer* renderer, float* rValues, float* gValues)
+{
+
+    renderRGBCuda(rValues, gValues, WIDTH, HEIGHT);
+
+	for (int y = 0; y < HEIGHT; ++y)
+	{
+		for (int x = 0; x < WIDTH; ++x)
+		{
+            uint32_t r = static_cast<uint32_t>(rValues[y * WIDTH + x] * 255.f);
+            uint32_t g = static_cast<uint32_t>(gValues[y * WIDTH + x] * 255.f);
+
+			//std::cout << "r: " << r << " g: " << g << std::endl;
+			SDL_SetRenderDrawColor(renderer, r, g, 20, 255);
+			SDL_RenderDrawPoint(renderer, x, y);
+		}
+	}
+}
 
 int main() 
 {
-
     // SDL ÃÊ±âÈ­
     if (SDL_Init(SDL_INIT_VIDEO) < 0) 
     {
@@ -185,9 +234,15 @@ int main()
 
 	uint32_t* pixels = new uint32_t[WIDTH * HEIGHT];
 
-    while (!quit) {
-        while (SDL_PollEvent(&event)) {
-            if (event.type == SDL_QUIT) {
+	float* PixelsR = new float[WIDTH * HEIGHT];
+    float* PixelsG = new float[WIDTH * HEIGHT];
+
+    while (!quit) 
+    {
+        while (SDL_PollEvent(&event)) 
+        {
+            if (event.type == SDL_QUIT) 
+            {
                 quit = true;
             }
         }
@@ -197,9 +252,11 @@ int main()
 
         auto start = std::chrono::steady_clock::now();
 
+		render(renderer, PixelsR, PixelsG);
+
 		//renderJuliaSet(renderer);
         //renderJuliaSetSimd(renderer);
-		renderJuliaSetWithCuda(renderer, pixels);
+		//renderJuliaSetWithCuda(renderer, pixels);
 	    
 
         auto end = std::chrono::steady_clock::now();
@@ -207,11 +264,7 @@ int main()
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
 		std::cout << "Julia set rendered in " << duration << " ms\n" << std::endl;
-
-		
-        C = C + Complex8(0.001f, 0.001f);
-		c = c + std::complex<float>(0.001, 0.001);
-
+        
         SDL_RenderPresent(renderer);
     }
 

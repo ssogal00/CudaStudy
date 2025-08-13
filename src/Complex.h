@@ -4,7 +4,7 @@
 #include <xmmintrin.h>
 #include <iostream>
 
-class alignas(64) Complex8
+class alignas(32) Complex8
 {
 public:
 	__m512 mValue;
