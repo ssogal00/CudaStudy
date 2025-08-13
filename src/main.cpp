@@ -8,6 +8,7 @@
 #include <cmath>
 #include <complex>
 #include <thread>
+#include "Vector.h"
 
 std::complex<float> c(-0.29609091, 0.62491);  // You can change this constant to get different Julia sets
 std::complex<float> dest(-0.20509091, 0.71591);
@@ -195,6 +196,12 @@ void render(SDL_Renderer* renderer, float* rValues, float* gValues)
 
 int main() 
 {
+    // vector test
+	Vector4 v1(1.0f, 2.0f, 3.0f, 4.0f);
+
+	std::cout << v1.Length() << std::endl;
+	std::cout << v1.X() << " " << v1.Y() << " " << std::endl;
+
     // SDL ÃÊ±âÈ­
     if (SDL_Init(SDL_INIT_VIDEO) < 0) 
     {
@@ -245,6 +252,7 @@ int main()
             {
                 quit = true;
             }
+
         }
 
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
@@ -254,16 +262,11 @@ int main()
 
 		render(renderer, PixelsR, PixelsG);
 
-		//renderJuliaSet(renderer);
-        //renderJuliaSetSimd(renderer);
-		//renderJuliaSetWithCuda(renderer, pixels);
-	    
-
         auto end = std::chrono::steady_clock::now();
 
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
-		std::cout << "Julia set rendered in " << duration << " ms\n" << std::endl;
+		std::cout << "Rendered in " << duration << " ms\n" << std::endl;
         
         SDL_RenderPresent(renderer);
     }
