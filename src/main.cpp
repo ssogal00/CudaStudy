@@ -15,7 +15,7 @@ std::complex<float> dest(-0.20509091, 0.71591);
 
 Complex8 C(-0.29609091f, 0.62491f);
 
-const int WIDTH = 512;
+const int WIDTH = 1024;
 const int HEIGHT = 512;
 
 const int MAX_ITERATIONS = 75;
@@ -175,10 +175,11 @@ void renderJuliaSetWithCuda(SDL_Renderer* renderer, uint32_t* pixels)
 	}
 }
 
-void render(SDL_Renderer* renderer, float* rValues, float* gValues)
+void render(SDL_Renderer* renderer, float* rValues, float* gValues, float* bValues)
 {
 
-    renderRGBCuda(rValues, gValues, WIDTH, HEIGHT);
+    //renderRGBCuda(rValues, gValues, WIDTH, HEIGHT);
+	renderSphereCuda(rValues, gValues, bValues, WIDTH, HEIGHT);
 
 	for (int y = 0; y < HEIGHT; ++y)
 	{
@@ -186,13 +187,15 @@ void render(SDL_Renderer* renderer, float* rValues, float* gValues)
 		{
             uint32_t r = static_cast<uint32_t>(rValues[y * WIDTH + x] * 255.f);
             uint32_t g = static_cast<uint32_t>(gValues[y * WIDTH + x] * 255.f);
+            uint32_t b = static_cast<uint32_t>(bValues[y * WIDTH + x] * 255.f);
 
 			//std::cout << "r: " << r << " g: " << g << std::endl;
-			SDL_SetRenderDrawColor(renderer, r, g, 20, 255);
+			SDL_SetRenderDrawColor(renderer, r, g, b, 255);
 			SDL_RenderDrawPoint(renderer, x, y);
 		}
 	}
 }
+
 
 int main() 
 {
@@ -239,10 +242,9 @@ int main()
     bool quit = false;
     SDL_Event event;
 
-	uint32_t* pixels = new uint32_t[WIDTH * HEIGHT];
-
 	float* PixelsR = new float[WIDTH * HEIGHT];
     float* PixelsG = new float[WIDTH * HEIGHT];
+	float* PixelsB = new float[WIDTH * HEIGHT];
 
     while (!quit) 
     {
@@ -260,7 +262,7 @@ int main()
 
         auto start = std::chrono::steady_clock::now();
 
-		render(renderer, PixelsR, PixelsG);
+		render(renderer, PixelsR, PixelsG, PixelsB);
 
         auto end = std::chrono::steady_clock::now();
 
