@@ -1,7 +1,7 @@
 #include "cuda_kernel.cuh"
 
 
-float3 CuRay::At(float t) const 
+__device__ float3 CuRay::At(float t) const
 {
     float3 result;
 	result.x = mOrigin.x + t * mDir.x;
@@ -10,25 +10,25 @@ float3 CuRay::At(float t) const
     return result;
 }
 
-float3 Unit(const float3& InValue)
+__device__ float3 Unit(const float3& InValue)
 {
 	float length = sqrtf(InValue.x * InValue.x + InValue.y * InValue.y + InValue.z * InValue.z);
 	return float3{ InValue.x / length, InValue.y / length, InValue.z / length };
 }
 
-float3 GetColor(const CuRay& ray)
+__device__ float3 GetColor(const CuRay& ray)
 {
 	float3 unitVec = Unit(ray.mDir);
 	float t = 0.5f * (unitVec.y + 1.0f);
-	return (1 - t) * float3 {1.0f, 1.0f, 1.0f} + t * float3{ 0.5f, 0.7f, 1.0f }; // Gradient from white to blue
+	return (t) * float3 {1.0f, 1.0f, 1.0f} + (1-t) * float3{ 0.5f, 0.7f, 1.0f }; // Gradient from white to blue
 }
 
-float3 operator+(const float3& lhs, const float3& rhs)
+__device__ float3 operator+(const float3& lhs, const float3& rhs)
 {
 	return float3{ lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z };
 }
 
-float3 operator*(const float3& lhs, const float f)
+__device__ float3 operator*(const float3& lhs, const float f)
 {
 	float3 result;
 	result.x = lhs.x * f;
@@ -36,7 +36,8 @@ float3 operator*(const float3& lhs, const float f)
     result.z = lhs.z * f;
     return result;
 }
-float3 operator*(const float f, const float3& rhs)
+
+__device__ float3 operator*(const float f, const float3& rhs)
 {
     float3 result;
     result.x = rhs.x * f;
