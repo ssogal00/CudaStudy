@@ -10,6 +10,23 @@ __device__ float3 CuRay::At(float t) const
     return result;
 }
 
+__device__ bool CuSphere::Intersect(const CuRay& ray, float& t) const
+{
+    float3 oc = ray.mOrigin - mOrigin;
+    float a = Dot(ray.mDir, ray.mDir);
+    float b = 2.0f * Dot(oc, ray.mDir);
+    float c = Dot(oc, oc) - mRadius * mRadius;
+    float discriminant = b * b - 4 * a * c;
+
+    if (discriminant < 0)
+    {
+        return false;
+    }
+
+    t = (-b - sqrtf(discriminant)) / (2.0f * a);
+
+    return true;
+}
 __device__ float3 Unit(const float3& InValue)
 {
 	float length = sqrtf(InValue.x * InValue.x + InValue.y * InValue.y + InValue.z * InValue.z);
@@ -26,6 +43,12 @@ __device__ float3 GetColor(const CuRay& ray)
 __device__ float3 operator+(const float3& lhs, const float3& rhs)
 {
 	return float3{ lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z };
+}
+
+
+__device__ float3 operator-(const float3& lhs, const float3& rhs)
+{
+    return float3{ lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z };
 }
 
 __device__ float3 operator*(const float3& lhs, const float f)
@@ -46,6 +69,14 @@ __device__ float3 operator*(const float f, const float3& rhs)
     return result;
 }
 
+__device__ float Dot(const float3& lhs, const float3& rhs)
+{
+	float result=0;
+	result += lhs.x * rhs.x;
+	result += lhs.y * rhs.y;
+	result += lhs.z * rhs.z;
+	return result;
+}
 
 __global__ void add_arrays_kernel(const int *a, const int *b, int *c, int size) {
     int index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -88,6 +119,10 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     int y = blockIdx.y * blockDim.y + threadIdx.y;
 
+	CuSphere sphere(make_float3(0.0f, 0.0f, -1.0f), 0.5f);
+
+  
+
 	float3 lowerLeft = make_float3(-2.0f, -1.0f, -1.0f);
 	float3 horizontal = make_float3(4.0f, 0.0f, 0.0f);
 	float3 vertical = make_float3(0.0f, 2.0f, 0.0f);
@@ -98,11 +133,22 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
     CuRay ray;
 	ray.mOrigin = make_float3(0.0f, 0.0f, 0.0f); // Camera position
 	ray.mDir = lowerLeft + u * horizontal + v * vertical;
-    float3 Color = GetColor(ray);
 
-    redValues[x + y * width] = Color.x;
-    greenValues[x + y * width] = Color.y;
-	blueValues[x + y * width] = Color.z;
+    float t = -1;
+    if (sphere.Intersect(ray, t))
+    {
+        redValues[x + y * width] = 1;
+        greenValues[x + y * width] = 0;
+        blueValues[x + y * width] = 0;
+    }
+    else
+    {
+        float3 Color = GetColor(ray);
+
+        redValues[x + y * width] = Color.x;
+        greenValues[x + y * width] = Color.y;
+        blueValues[x + y * width] = Color.z;
+    }
 }
 
 __global__ void renderJuliaSetCudaKernel(uint32_t* pixels, int width, int height, float c_real, float c_imag, int max_iterations)
