@@ -27,6 +27,13 @@ __device__ bool CuSphere::Intersect(const CuRay& ray, float& t) const
 
     return true;
 }
+
+__device__ CuRay CuCamera::GetRay(float u, float v) const
+{
+	float3 dir = Unit(mUpperLeft + u * mHorizontal - v * mVertical);
+	return CuRay(mOrigin, dir);
+}
+
 __device__ float3 Unit(const float3& InValue)
 {
 	float length = sqrtf(InValue.x * InValue.x + InValue.y * InValue.y + InValue.z * InValue.z);
@@ -37,7 +44,7 @@ __device__ float3 GetColor(const CuRay& ray)
 {
 	float3 unitVec = Unit(ray.mDir);
 	float t = 0.5f * (unitVec.y + 1.0f);
-	return (t) * float3 {1.0f, 1.0f, 1.0f} + (1-t) * float3{ 0.5f, 0.7f, 1.0f }; // Gradient from white to blue
+	return (1-t) * float3 {1.0f, 1.0f, 1.0f} + (t) * float3{ 0.5f, 0.7f, 1.0f }; // Gradient from white to blue
 }
 
 __device__ float3 operator+(const float3& lhs, const float3& rhs)
@@ -119,11 +126,9 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     int y = blockIdx.y * blockDim.y + threadIdx.y;
 
-	CuSphere sphere(make_float3(0.0f, 0.0f, -1.0f), 0.5f);
+	CuSphere sphere(make_float3(0.0f, -0.00f, -1.00f), 0.5f);
 
-  
-
-	float3 lowerLeft = make_float3(-2.0f, -1.0f, -1.0f);
+	float3 upperLeft = make_float3(-2.0f, 1.0f, -1.0f);
 	float3 horizontal = make_float3(4.0f, 0.0f, 0.0f);
 	float3 vertical = make_float3(0.0f, 2.0f, 0.0f);
 
@@ -131,8 +136,8 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
 	float v = float(y) / float(height);
 
     CuRay ray;
-	ray.mOrigin = make_float3(0.0f, 0.0f, 0.0f); // Camera position
-	ray.mDir = lowerLeft + u * horizontal + v * vertical;
+	ray.mOrigin = make_float3(0.0f, 0.20f, 0.0f); // Camera position
+	ray.mDir = Unit(upperLeft + u * horizontal - v * vertical);
 
     float t = -1;
     if (sphere.Intersect(ray, t))

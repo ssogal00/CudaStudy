@@ -254,7 +254,17 @@ int main()
             {
                 quit = true;
             }
+            else if (event.type == SDL_KEYDOWN)
+            {
+                if (event.key.keysym.sym == SDLK_UP)
+                {
 
+                }
+                else if (event.key.keysym.sym == SDLK_DOWN)
+                {
+
+                }
+            }
         }
 
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);

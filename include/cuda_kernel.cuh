@@ -41,17 +41,14 @@ struct CuCamera
 {
 public:
 	float3 mOrigin;
-	float3 mLowerLeftCorner;
+	float3 mUpperLeft;
 	float3 mHorizontal;
 	float3 mVertical;
 
-	__device__ CuCamera(float3 origin, float3 lowerLeftCorner, float3 horizontal, float3 vertical)
-		: mOrigin{ origin }, mLowerLeftCorner{ lowerLeftCorner }, mHorizontal{ horizontal }, mVertical{ vertical } {}
+	__device__ CuCamera(float3 origin, float3 upperLeft, float3 horizontal, float3 vertical)
+		: mOrigin{ origin }, mUpperLeft{ upperLeft }, mHorizontal{ horizontal }, mVertical{ vertical } {}
 
-	__device__ CuRay GetRay(float u, float v) const
-	{
-		return CuRay{ mOrigin, mLowerLeftCorner + u * mHorizontal + v * mVertical - mOrigin };
-	}
+	__device__ CuRay GetRay(float u, float v) const;
 };
 
 void add_arrays(const int *a, const int *b, int *c, int size);
