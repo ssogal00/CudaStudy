@@ -27,6 +27,27 @@ __device__ bool CuSphere::Intersect(const CuRay& ray, float& t) const
 
     return true;
 }
+__device__ bool CuSphere::Hit(const CuRay& ray, CuHitRecord& hitRecord, float tMin, float tMax) const
+{
+    float3 oc = ray.mOrigin - mOrigin;
+    float a = Dot(ray.mDir, ray.mDir);
+    float b = 2.0f * Dot(oc, ray.mDir);
+    float c = Dot(oc, oc) - mRadius * mRadius;
+    float discriminant = b*b - a*c;
+
+    if (discriminant > 0)
+    {
+        float t = (-b - sqrtf(discriminant)) / a;
+        if (t < tMax && t > tMin)
+        {
+            hitRecord.mT = t;
+            hitRecord.mPoint = ray.At(t);
+            hitRecord.mNormal = Unit((hitRecord.mPoint - mOrigin) / mRadius);
+            return true;
+        }
+    }
+	return true;
+}
 
 __device__ CuRay CuCamera::GetRay(float u, float v) const
 {
@@ -76,6 +97,20 @@ __device__ float3 operator*(const float f, const float3& rhs)
     return result;
 }
 
+__device__ float3 operator/(const float3& lhs, const float f)
+{
+	if (f == 0.0f) 
+    {
+		return float3{ 0.0f, 0.0f, 0.0f }; // Avoid division by zero
+	}
+
+	float3 result;
+	result.x = lhs.x / f;
+	result.y = lhs.y / f;
+	result.z = lhs.z / f;
+	return result;
+}
+
 __device__ float Dot(const float3& lhs, const float3& rhs)
 {
 	float result=0;
@@ -121,7 +156,7 @@ __global__ void renderRGBCudaKernel(float* redValues, float* greenValues, int wi
     greenValues[x + y * width] = static_cast<float>(y) / height;
 }
 
-__global__ void renderSphereKernel(float* redValues, float* greenValues, float* blueValues, int width, int height)
+__global__ void renderSphereKernel(float* redValues, float* greenValues, float* blueValues, int width, int height, float CameraDistance, float CameraHeight)
 {
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -136,7 +171,7 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
 	float v = float(y) / float(height);
 
     CuRay ray;
-	ray.mOrigin = make_float3(0.0f, 0.20f, 0.0f); // Camera position
+	ray.mOrigin = make_float3(0.0f, CameraHeight, CameraDistance); // Camera position
 	ray.mDir = Unit(upperLeft + u * horizontal - v * vertical);
 
     float t = -1;
@@ -149,7 +184,6 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
     else
     {
         float3 Color = GetColor(ray);
-
         redValues[x + y * width] = Color.x;
         greenValues[x + y * width] = Color.y;
         blueValues[x + y * width] = Color.z;
@@ -233,7 +267,7 @@ void renderRGBCuda(float* redValues, float* greenValues, int width, int height)
 	cudaFree(d_greenValues);
 }
 
-void renderSphereCuda(float* redValues, float* greenValues, float* blueValues,int width, int height) 
+void renderSphereCuda(float* redValues, float* greenValues, float* blueValues,int width, int height, float fCameraDistance, float fCameraHeight)
 {
     float* d_redValues, * d_greenValues, * d_blueValues;
 
@@ -245,7 +279,7 @@ void renderSphereCuda(float* redValues, float* greenValues, float* blueValues,in
     dim3 dimBlock(32, 32, 1);
     dim3 dimGrid((width) / dimBlock.x, (height) / dimBlock.y, 1);
 
-    renderSphereKernel << <dimGrid, dimBlock >> > (d_redValues, d_greenValues, d_blueValues, width, height);
+    renderSphereKernel << <dimGrid, dimBlock >> > (d_redValues, d_greenValues, d_blueValues, width, height, fCameraDistance, fCameraHeight);
 
     cudaDeviceSynchronize();
 

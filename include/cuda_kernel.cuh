@@ -13,6 +13,24 @@ __device__ float3 operator+(const float3& lhs, const float3& rhs);
 __device__ float3 operator-(const float3& lhs, const float3& rhs);
 __device__ float3 operator*(const float3& lhs, const float f);
 __device__ float3 operator*(const float f, const float3& rhs);
+__device__ float3 operator/(const float3& lhs, const float f);
+
+struct CuHitRecord
+{
+public:
+	float3 mPoint;  // Point of intersection
+	float3 mNormal; // Normal at the intersection point
+	float mT;       // Distance along the ray to the intersection point
+
+	__device__ CuHitRecord() 
+		: mPoint{ 0.0f, 0.0f, 0.0f }, mNormal{ 0.0f, 0.0f, 1.0f }, mT{ 0.0f }
+	{
+	}
+	__device__ CuHitRecord(float3 point, float3 normal, float t) 
+		: mPoint{ point }, mNormal{ normal }, mT{ t }
+	{
+	}
+};
 
 struct CuRay 
 {
@@ -34,6 +52,7 @@ public:
 	float mRadius;
 	__device__ CuSphere() : mOrigin{ 0.0f, 0.0f, 0.0f }, mRadius{ 1.0f } {}
 	__device__ CuSphere(float3 origin, float radius) : mOrigin{ origin }, mRadius{ radius } {}
+	__device__ bool Hit(const CuRay& ray, CuHitRecord& hitRecord, float tMin, float tMax) const;
 	__device__ bool Intersect(const CuRay& ray, float& t) const;	
 };
 
@@ -57,5 +76,5 @@ void renderJuliaSetCuda(uint32_t* pixels, int width, int height, float C_Real, f
 
 void renderRGBCuda(float* redValues, float* greenValues, int width, int height);
 
-void renderSphereCuda(float* redValues, float* greenValues, float* blueValues, int width, int height);
+void renderSphereCuda(float* redValues, float* greenValues, float* blueValues, int width, int height, float fCameraDistance, float fCameraHeight);
 #endif // CUDA_KERNEL_CUH

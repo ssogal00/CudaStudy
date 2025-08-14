@@ -20,6 +20,8 @@ const int HEIGHT = 512;
 
 const int MAX_ITERATIONS = 75;
 
+float CameraDistance = 0;
+
 uint32_t julia(float x, float y) 
 {
     std::complex<float> z(x, y);
@@ -179,7 +181,7 @@ void render(SDL_Renderer* renderer, float* rValues, float* gValues, float* bValu
 {
 
     //renderRGBCuda(rValues, gValues, WIDTH, HEIGHT);
-	renderSphereCuda(rValues, gValues, bValues, WIDTH, HEIGHT);
+	renderSphereCuda(rValues, gValues, bValues, WIDTH, HEIGHT, CameraDistance, 0);
 
 	for (int y = 0; y < HEIGHT; ++y)
 	{
@@ -258,11 +260,11 @@ int main()
             {
                 if (event.key.keysym.sym == SDLK_UP)
                 {
-
+					CameraDistance -= 0.1f; // 카메라 거리를 줄여줍니다.
                 }
                 else if (event.key.keysym.sym == SDLK_DOWN)
                 {
-
+					CameraDistance += 0.1f; // 카메라 거리를 늘려줍니다.
                 }
             }
         }
