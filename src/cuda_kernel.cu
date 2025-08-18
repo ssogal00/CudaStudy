@@ -190,6 +190,12 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
     }
 }
 
+__global__ void SetupRandomState(curandState* state, unsigned long long seed, int idx)
+{
+    int id = threadIdx.x + blockIdx.x * blockDim.x;
+    curand_init(seed, idx, 0, state);
+}
+
 __global__ void renderJuliaSetCudaKernel(uint32_t* pixels, int width, int height, float c_real, float c_imag, int max_iterations)
 {
     int x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -225,7 +231,6 @@ __global__ void renderJuliaSetCudaKernel(uint32_t* pixels, int width, int height
     }
 }
 
-
 void renderJuliaSetCuda(uint32_t* pixels, int width, int height, float C_Real, float C_Imag, int max_iterations)
 {
     uint32_t* d_pixels;
@@ -234,7 +239,6 @@ void renderJuliaSetCuda(uint32_t* pixels, int width, int height, float C_Real, f
 
     dim3 threadsPerBlock(16, 16);
     dim3 blocksPerGrid((width + threadsPerBlock.x - 1) / threadsPerBlock.x, (height + threadsPerBlock.y - 1) / threadsPerBlock.y);
-
 
     renderJuliaSetCudaKernel <<<blocksPerGrid, threadsPerBlock >>> (d_pixels, width, height, C_Real, C_Imag, max_iterations);
 

@@ -3,8 +3,12 @@
 
 #include <vector_types.h>
 #include "Vector.h"
+#include <cmath>
+#include <curand_kernel.h>
 
 struct CuRay;
+
+#define M_PI (3.14159265358979323846)
 
 __device__ float3 Unit(const float3& InValue);
 __device__ float3 GetColor(const CuRay& ray);
@@ -14,6 +18,39 @@ __device__ float3 operator-(const float3& lhs, const float3& rhs);
 __device__ float3 operator*(const float3& lhs, const float f);
 __device__ float3 operator*(const float f, const float3& rhs);
 __device__ float3 operator/(const float3& lhs, const float f);
+
+__device__ inline float3 Reflect(const float3& v, const float3& n);
+
+__device__ inline double RandomDouble()
+{
+	return static_cast<double>(std::rand()) / static_cast<double>(RAND_MAX + 1);
+}
+
+__device__ inline float RandomFloat()
+{
+	return static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX + 1);
+}
+
+__device__ inline double RandomDoubleInRange(double min, double max)
+{
+	return min + (max - min) * RandomDouble();
+}
+
+__device__ inline float3 RandomUnitVector(curandState* state) 
+{
+	float z = curand_uniform(state) * 2.0f - 1.0f;  // [-1,1]
+	float theta = curand_uniform(state) * 2.0f * M_PI; // [0, 2¥ð)
+	float r = sqrtf(1.0f - z * z);
+
+	float x = r * cosf(theta);
+	float y = r * sinf(theta);
+
+	return make_float3(x, y, z);
+}
+
+__global__ void SetupRandomState(curandState* state, unsigned long long seed, int idx);
+
+
 
 struct CuHitRecord
 {
