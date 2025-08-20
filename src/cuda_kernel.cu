@@ -195,6 +195,7 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
     int y = blockIdx.y * blockDim.y + threadIdx.y;
 
 	CuSphere sphere(make_float3(0.0f, -0.00f, -1.00f), 0.1f);
+    CuSphere sphereGreen(make_float3(0.20f, -0.00f, -1.00f), 0.1f);
 	CuSphere groundSphere(make_float3(0.0f, -2.0f, -1.0f), 2.0f);
 
 	CuCamera mainCamera{
@@ -214,9 +215,9 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
 	float u = float(x) / float(width);
 	float v = float(y) / float(height);
 
-    CuRay ray1;
-	ray1.mOrigin = make_float3(0.0f, CameraHeight, CameraDistance); // Camera position
-	ray1.mDir = Unit(upperLeft + u * horizontal - v * vertical);
+    CuRay dummyRay;
+	dummyRay.mOrigin = make_float3(0.0f, CameraHeight, CameraDistance); // Camera position
+	dummyRay.mDir = Unit(upperLeft + u * horizontal - v * vertical);
 	CuRay cameraRay = mainCamera.GetRay(x, y);
 
     float t = -1;
@@ -228,6 +229,12 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
         greenValues[x + y * width] = 0;
         blueValues[x + y * width] = 0;
     }
+	else if (sphereGreen.Intersect(cameraRay, t))
+	{
+		redValues[x + y * width] = 0;
+		greenValues[x + y * width] = 1;
+		blueValues[x + y * width] = 0;
+	}
     else
     {
         float3 Color = cameraRay.mDir;
