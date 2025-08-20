@@ -16,7 +16,7 @@ __device__ bool CuSphere::Intersect(const CuRay& ray, float& t) const
     float a = Dot(ray.mDir, ray.mDir);
     float b = 2.0f * Dot(oc, ray.mDir);
     float c = Dot(oc, oc) - mRadius * mRadius;
-    float discriminant = b * b - 4 * a * c;
+    float discriminant = (b * b) - (4 * a * c);
 
     if (discriminant < 0)
     {
@@ -53,6 +53,12 @@ __device__ CuRay CuCamera::GetRay(float u, float v) const
 {
 	float3 dir = Unit(mUpperLeft + u * mHorizontal - v * mVertical);
 	return CuRay(mOrigin, dir);
+}
+
+__device__ void CuCamera::Initialize()
+{
+	float3 vLookDir = Unit(mLookAt - mOrigin);
+	float3 vRight = Unit(Cross(vLookDir, mUp));
 }
 
 __device__ float3 Unit(const float3& InValue)
@@ -120,6 +126,15 @@ __device__ float Dot(const float3& lhs, const float3& rhs)
 	return result;
 }
 
+__device__ float3 Cross(const float3& lhs, const float3& rhs)
+{
+		return make_float3(
+		lhs.y * rhs.z - lhs.z * rhs.y,
+		lhs.z * rhs.x - lhs.x * rhs.z,
+		lhs.x * rhs.y - lhs.y * rhs.x
+        );
+}
+
 __global__ void add_arrays_kernel(const int *a, const int *b, int *c, int size) {
     int index = blockIdx.x * blockDim.x + threadIdx.x;
     if (index < size) {
@@ -162,6 +177,7 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
     int y = blockIdx.y * blockDim.y + threadIdx.y;
 
 	CuSphere sphere(make_float3(0.0f, -0.00f, -1.00f), 0.5f);
+	CuSphere groundSphere(make_float3(0.0f, -2.0f, -1.0f), 2.0f);
 
 	float3 upperLeft = make_float3(-2.0f, 1.0f, -1.0f);
 	float3 horizontal = make_float3(4.0f, 0.0f, 0.0f);
@@ -181,6 +197,12 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
         greenValues[x + y * width] = 0;
         blueValues[x + y * width] = 0;
     }
+	else if (groundSphere.Intersect(ray, t))
+	{
+		redValues[x + y * width] = 0.0f;
+		greenValues[x + y * width] = 1.f;
+		blueValues[x + y * width] = 0.0f;
+	}
     else
     {
         float3 Color = GetColor(ray);
@@ -188,12 +210,16 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
         greenValues[x + y * width] = Color.y;
         blueValues[x + y * width] = Color.z;
     }
+
+
 }
 
-__global__ void SetupRandomState(curandState* state, unsigned long long seed, int idx)
+__global__ void SetupRandomState(curandState* state, unsigned long long seed, int width)
 {
-    int id = threadIdx.x + blockIdx.x * blockDim.x;
-    curand_init(seed, idx, 0, state);
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    int y = blockIdx.y * blockDim.y + threadIdx.y;
+	int id = y * width + x;
+    curand_init(seed, id, 0, &state[id]);
 }
 
 __global__ void renderJuliaSetCudaKernel(uint32_t* pixels, int width, int height, float c_real, float c_imag, int max_iterations)
@@ -275,6 +301,9 @@ void renderSphereCuda(float* redValues, float* greenValues, float* blueValues,in
 {
     float* d_redValues, * d_greenValues, * d_blueValues;
 
+	curandState* d_randomState;
+
+	cudaMalloc((void**)&d_randomState, width * height * sizeof(curandState));
     cudaMalloc((void**)&d_redValues, width * height * sizeof(float));
     cudaMalloc((void**)&d_greenValues, width * height * sizeof(float));
     cudaMalloc((void**)&d_blueValues, width * height * sizeof(float));
@@ -283,6 +312,7 @@ void renderSphereCuda(float* redValues, float* greenValues, float* blueValues,in
     dim3 dimBlock(32, 32, 1);
     dim3 dimGrid((width) / dimBlock.x, (height) / dimBlock.y, 1);
 
+	SetupRandomState << < dimGrid, dimBlock >> > (d_randomState, time(NULL), width);
     renderSphereKernel << <dimGrid, dimBlock >> > (d_redValues, d_greenValues, d_blueValues, width, height, fCameraDistance, fCameraHeight);
 
     cudaDeviceSynchronize();
@@ -294,4 +324,5 @@ void renderSphereCuda(float* redValues, float* greenValues, float* blueValues,in
     cudaFree(d_redValues);
     cudaFree(d_greenValues);
     cudaFree(d_blueValues);
+	cudaFree(d_randomState); 
 }

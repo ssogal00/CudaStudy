@@ -4,36 +4,38 @@
 #include <vector_types.h>
 #include "Vector.h"
 #include <cmath>
+#include <math.h>
 #include <curand_kernel.h>
 
 struct CuRay;
 
 #define M_PI (3.14159265358979323846)
 
-__device__ float3 Unit(const float3& InValue);
+__device__ inline float3 Unit(const float3& InValue);
 __device__ float3 GetColor(const CuRay& ray);
 __device__ float Dot(const float3& lhs, const float3& rhs);
-__device__ float3 operator+(const float3& lhs, const float3& rhs);
-__device__ float3 operator-(const float3& lhs, const float3& rhs);
-__device__ float3 operator*(const float3& lhs, const float f);
-__device__ float3 operator*(const float f, const float3& rhs);
-__device__ float3 operator/(const float3& lhs, const float f);
+__device__ inline float3 Cross(const float3& lhs, const float3& rhs);
+__device__ inline float3 operator+(const float3& lhs, const float3& rhs);
+__device__ inline float3 operator-(const float3& lhs, const float3& rhs);
+__device__ inline float3 operator*(const float3& lhs, const float f);
+__device__ inline float3 operator*(const float f, const float3& rhs);
+__device__ inline float3 operator/(const float3& lhs, const float f);
 
 __device__ inline float3 Reflect(const float3& v, const float3& n);
 
-__device__ inline double RandomDouble()
+__device__ inline double RandomDouble(curandState* state)
 {
-	return static_cast<double>(std::rand()) / static_cast<double>(RAND_MAX + 1);
+	return static_cast<double>(curand_uniform(state));
 }
 
-__device__ inline float RandomFloat()
+__device__ inline float RandomFloat(curandState* state)
 {
-	return static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX + 1);
+	return static_cast<float>(curand_uniform(state));
 }
 
-__device__ inline double RandomDoubleInRange(double min, double max)
+__device__ inline double RandomDoubleInRange(double min, double max, curandState* state)
 {
-	return min + (max - min) * RandomDouble();
+	return min + (max - min) * RandomDouble(state);
 }
 
 __device__ inline float3 RandomUnitVector(curandState* state) 
@@ -100,11 +102,20 @@ public:
 	float3 mUpperLeft;
 	float3 mHorizontal;
 	float3 mVertical;
+	float3 mLookAt;
+	float3 mUp;
+	
+	__device__ void Initialize();
 
 	__device__ CuCamera(float3 origin, float3 upperLeft, float3 horizontal, float3 vertical)
 		: mOrigin{ origin }, mUpperLeft{ upperLeft }, mHorizontal{ horizontal }, mVertical{ vertical } {}
 
 	__device__ CuRay GetRay(float u, float v) const;
+
+private:
+	float3 mPixel00;
+	float3 mPixelDeltaU;
+	float3 mPixelDeltaV;
 };
 
 void add_arrays(const int *a, const int *b, int *c, int size);

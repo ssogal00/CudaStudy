@@ -163,7 +163,6 @@ void renderJuliaSetSimd(SDL_Renderer* renderer)
 
 void renderJuliaSetWithCuda(SDL_Renderer* renderer, uint32_t* pixels)
 {
-
 	renderJuliaSetCuda(pixels, WIDTH, HEIGHT, c.real(), c.imag(), MAX_ITERATIONS);
     
 	for (int y = 0; y < HEIGHT; ++y)
