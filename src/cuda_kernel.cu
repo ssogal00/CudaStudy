@@ -33,7 +33,7 @@ __device__ bool CuSphere::Hit(const CuRay& ray, CuHitRecord& hitRecord, float tM
     float a = Dot(ray.mDir, ray.mDir);
     float b = 2.0f * Dot(oc, ray.mDir);
     float c = Dot(oc, oc) - mRadius * mRadius;
-    float discriminant = b*b - a*c;
+    float discriminant = b*b - 4*a*c;
 
     if (discriminant > 0)
     {
@@ -46,7 +46,7 @@ __device__ bool CuSphere::Hit(const CuRay& ray, CuHitRecord& hitRecord, float tM
             return true;
         }
     }
-	return true;
+	return false;
 }
 
 __device__ CuRay CuCamera::GetRay(float u, float v) const
@@ -223,12 +223,15 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
     float t = -1;
 	CuHitRecord hitRecord;
     
-    if(sphere.Intersect(cameraRay, t))
+    //
+    //if(sphere.Intersect(cameraRay, t))
+	if (sphere.Hit(cameraRay, hitRecord, 0.001f, 1000.0f))
 	{
-        redValues[x + y * width] = 1;
-        greenValues[x + y * width] = 0;
-        blueValues[x + y * width] = 0;
-    }
+		// Hit the sphere
+		redValues[x + y * width] = 1;
+		greenValues[x + y * width] = 0;
+		blueValues[x + y * width] = 0;
+	}
 	else if (sphereGreen.Intersect(cameraRay, t))
 	{
 		redValues[x + y * width] = 0;
