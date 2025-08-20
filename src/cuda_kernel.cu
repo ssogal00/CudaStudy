@@ -54,7 +54,7 @@ __device__ CuRay CuCamera::GetRay(float u, float v) const
 	//float3 dir = Unit(mUpperLeft + u * mHorizontal - v * mVertical);
 	//return CuRay(mOrigin, dir);
 
-	float3 pixelSample = mPixel00 + mPixelDeltaU * u - mPixelDeltaV * v;
+	float3 pixelSample = mPixel00 + mPixelDeltaU * u + mPixelDeltaV * v;
 	return CuRay(mOrigin, Unit(pixelSample - mOrigin));
 }
 
@@ -221,11 +221,9 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
 
     float t = -1;
 	CuHitRecord hitRecord;
-    //if (sphere.Hit(ray1, hitRecord, 0, 1000))
+    
     if(sphere.Intersect(cameraRay, t))
-	//CuHitRecord hitRecord;
-    //if (sphere.Hit(ray, hitRecord, 0.001f, 1000.0f))
-    {
+	{
         redValues[x + y * width] = 1;
         greenValues[x + y * width] = 0;
         blueValues[x + y * width] = 0;
@@ -233,8 +231,8 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
     else
     {
         float3 Color = cameraRay.mDir;
-        redValues[x + y * width] = Color.x;
-        greenValues[x + y * width] = Color.y;
+        redValues[x + y * width] = 0;// fmaxf(Color.x, 0);
+        greenValues[x + y * width] = fmaxf(Color.y,0);
         blueValues[x + y * width] = 0;
     }
 
