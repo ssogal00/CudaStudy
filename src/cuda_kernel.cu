@@ -51,16 +51,33 @@ __device__ bool CuSphere::Hit(const CuRay& ray, CuHitRecord& hitRecord, float tM
 
 __device__ CuRay CuCamera::GetRay(float u, float v) const
 {
-	float3 dir = Unit(mUpperLeft + u * mHorizontal - v * mVertical);
-	return CuRay(mOrigin, dir);
+	//float3 dir = Unit(mUpperLeft + u * mHorizontal - v * mVertical);
+	//return CuRay(mOrigin, dir);
+
+	float3 pixelSample = mPixel00 + mPixelDeltaU * u - mPixelDeltaV * v;
+	return CuRay(mOrigin, Unit(pixelSample - mOrigin));
 }
 
 __device__ void CuCamera::Initialize()
 {
-	float3 vLookDir = Unit(mLookAt - mOrigin);
-	float3 vRight = Unit(Cross(vLookDir, mUp));
-}
+    double theta = mFOV * M_PI / 180.0f; // Convert FOV to radians
+    double h = tanf(theta / 2);
+    double viewportHeight = 2 * h * mFocalLength;
+    double viewportWidth = viewportHeight * mAspectRatio;
 
+    float3 vLookDir = Unit(mLookAt - mOrigin);
+    float3 vRight = Unit(Cross(vLookDir, mUp));
+    float3 vUp = Unit(Cross(vRight, vLookDir));
+
+	float3 viewportU = viewportWidth * vRight;
+	float3 viewportV = viewportHeight * (vUp);
+
+    mPixelDeltaU = viewportU / mImageWidth;
+    mPixelDeltaV = viewportV / mImageHeight;
+
+    float3 viewportUpperLeft = mOrigin + vLookDir * mFocalLength - (viewportU * 0.5f) - (viewportV * 0.5f);
+    mPixel00 = viewportUpperLeft + 0.5 * (mPixelDeltaU + mPixelDeltaV); // Center the pixel at the upper left corner
+}
 __device__ float3 Unit(const float3& InValue)
 {
 	float length = sqrtf(InValue.x * InValue.x + InValue.y * InValue.y + InValue.z * InValue.z);
@@ -70,8 +87,9 @@ __device__ float3 Unit(const float3& InValue)
 __device__ float3 GetColor(const CuRay& ray)
 {
 	float3 unitVec = Unit(ray.mDir);
-	float t = 0.5f * (unitVec.y + 1.0f);
-	return (1-t) * float3 {1.0f, 1.0f, 1.0f} + (t) * float3{ 0.5f, 0.7f, 1.0f }; // Gradient from white to blue
+	//float t = 0.5f * (unitVec.y + 1.0f);
+    float t = unitVec.y;
+	return (t) * float3 {0, 1.0f, 0.f} + (1-t) * float3{ 0, 0, 1.0f }; // Gradient from white to blue
 }
 
 __device__ float3 operator+(const float3& lhs, const float3& rhs)
@@ -176,8 +194,18 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     int y = blockIdx.y * blockDim.y + threadIdx.y;
 
-	CuSphere sphere(make_float3(0.0f, -0.00f, -1.00f), 0.5f);
+	CuSphere sphere(make_float3(0.0f, -0.00f, -1.00f), 0.1f);
 	CuSphere groundSphere(make_float3(0.0f, -2.0f, -1.0f), 2.0f);
+
+	CuCamera mainCamera{
+		make_float3(0.0f, CameraHeight, CameraDistance), // Camera position
+		make_float3(0.0f, 0.0f, -1.0f), // Look at point
+		make_float3(0.0f, 1.0f, 0.0f), // Up vector
+		90.0f, // Field of view
+		float(width) / float(height) // Aspect ratio
+    };
+
+    mainCamera.Initialize();
 
 	float3 upperLeft = make_float3(-2.0f, 1.0f, -1.0f);
 	float3 horizontal = make_float3(4.0f, 0.0f, 0.0f);
@@ -186,29 +214,28 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
 	float u = float(x) / float(width);
 	float v = float(y) / float(height);
 
-    CuRay ray;
-	ray.mOrigin = make_float3(0.0f, CameraHeight, CameraDistance); // Camera position
-	ray.mDir = Unit(upperLeft + u * horizontal - v * vertical);
+    CuRay ray1;
+	ray1.mOrigin = make_float3(0.0f, CameraHeight, CameraDistance); // Camera position
+	ray1.mDir = Unit(upperLeft + u * horizontal - v * vertical);
+	CuRay cameraRay = mainCamera.GetRay(x, y);
 
     float t = -1;
-    if (sphere.Intersect(ray, t))
+	CuHitRecord hitRecord;
+    //if (sphere.Hit(ray1, hitRecord, 0, 1000))
+    if(sphere.Intersect(cameraRay, t))
+	//CuHitRecord hitRecord;
+    //if (sphere.Hit(ray, hitRecord, 0.001f, 1000.0f))
     {
         redValues[x + y * width] = 1;
         greenValues[x + y * width] = 0;
         blueValues[x + y * width] = 0;
     }
-	else if (groundSphere.Intersect(ray, t))
-	{
-		redValues[x + y * width] = 0.0f;
-		greenValues[x + y * width] = 1.f;
-		blueValues[x + y * width] = 0.0f;
-	}
     else
     {
-        float3 Color = GetColor(ray);
+        float3 Color = cameraRay.mDir;
         redValues[x + y * width] = Color.x;
         greenValues[x + y * width] = Color.y;
-        blueValues[x + y * width] = Color.z;
+        blueValues[x + y * width] = 0;
     }
 
 
