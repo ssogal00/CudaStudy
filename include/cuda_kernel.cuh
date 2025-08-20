@@ -107,8 +107,15 @@ public:
 	
 	__device__ void Initialize();
 
-	__device__ CuCamera(float3 origin, float3 upperLeft, float3 horizontal, float3 vertical)
-		: mOrigin{ origin }, mUpperLeft{ upperLeft }, mHorizontal{ horizontal }, mVertical{ vertical } {}
+	__device__ CuCamera(float3 vOrigin, float3 vLookAt, float3 vUp, float fov, float aspectRatio)
+		: mOrigin{ vOrigin }, 
+		mLookAt{ vLookAt }, 
+		mUp{ vUp }, 
+		mFOV{ fov }, 
+		mAspectRatio{ aspectRatio }
+	{
+		Initialize();
+	}
 
 	__device__ CuRay GetRay(float u, float v) const;
 
@@ -116,6 +123,11 @@ private:
 	float3 mPixel00;
 	float3 mPixelDeltaU;
 	float3 mPixelDeltaV;
+	float mFOV = 60;
+	float mAspectRatio = 2.0f;
+	float mFocalLength = 100;
+	float mImageWidth = 1024;
+	float mImageHeight = 512;
 };
 
 void add_arrays(const int *a, const int *b, int *c, int size);
