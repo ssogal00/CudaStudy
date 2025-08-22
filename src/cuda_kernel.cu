@@ -84,6 +84,11 @@ __device__ float3 Unit(const float3& InValue)
 	return float3{ InValue.x / length, InValue.y / length, InValue.z / length };
 }
 
+__device__ float3 GetRayHitColor(const CuRay& ray)
+{
+    
+}
+
 __device__ float3 GetColor(const CuRay& ray)
 {
 	float3 unitVec = Unit(ray.mDir);
@@ -96,11 +101,14 @@ __device__ float3 operator+(const float3& lhs, const float3& rhs)
 {
 	return float3{ lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z };
 }
-
-
 __device__ float3 operator-(const float3& lhs, const float3& rhs)
 {
     return float3{ lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z };
+}
+
+__device__ float3 operator-(const float3& v)
+{
+	return float3{ -v.x, -v.y, -v.z };
 }
 
 __device__ float3 operator*(const float3& lhs, const float f)
@@ -146,12 +154,26 @@ __device__ float Dot(const float3& lhs, const float3& rhs)
 
 __device__ float3 Cross(const float3& lhs, const float3& rhs)
 {
-		return make_float3(
+		return Unit(make_float3(
 		lhs.y * rhs.z - lhs.z * rhs.y,
 		lhs.z * rhs.x - lhs.x * rhs.z,
-		lhs.x * rhs.y - lhs.y * rhs.x
-        );
+		lhs.x * rhs.y - lhs.y * rhs.x));
 }
+
+__device__ float3 Reflect(const float3& v, const float3& n)
+{
+	return Unit(v - 2 * Dot(v, n) * n);
+}
+
+
+__device__ bool MetalScatter(const CuRay& rayIn, const CuHitRecord& hitRecord, float3& attenuation, CuRay& scattered, curandState* state)
+{
+    float3 reflected = Reflect(Unit(rayIn.mDir), hitRecord.mNormal);
+    scattered = CuRay(hitRecord.mPoint, reflected); // Add some fuzziness
+    attenuation = make_float3(1.0f, 1.0f, 1.0f); // Metal has no color attenuation
+    return (Dot(scattered.mDir, hitRecord.mNormal) > 0.0f);
+}
+
 
 __global__ void add_arrays_kernel(const int *a, const int *b, int *c, int size) {
     int index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -196,7 +218,6 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
 
 	CuSphere sphere(make_float3(0.0f, -0.00f, -1.00f), 0.1f);
     CuSphere sphereGreen(make_float3(0.20f, -0.00f, -1.00f), 0.1f);
-	CuSphere groundSphere(make_float3(0.0f, -2.0f, -1.0f), 2.0f);
 
 	CuCamera mainCamera{
 		make_float3(0.0f, CameraHeight, CameraDistance), // Camera position

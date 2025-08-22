@@ -10,8 +10,8 @@
 #include <thread>
 #include "Vector.h"
 
-std::complex<float> c(-0.29609091, 0.62491);  // You can change this constant to get different Julia sets
-std::complex<float> dest(-0.20509091, 0.71591);
+std::complex<float> c(-0.29609091f, 0.62491f);  // You can change this constant to get different Julia sets
+std::complex<float> dest(-0.20509091f, 0.71591f);
 
 Complex8 C(-0.29609091f, 0.62491f);
 
@@ -21,6 +21,7 @@ const int HEIGHT = 512;
 const int MAX_ITERATIONS = 75;
 
 float CameraDistance = 0;
+float CameraHeight = 0;
 
 uint32_t julia(float x, float y) 
 {
@@ -67,6 +68,7 @@ __m256 juliaSimd2(Complex8& A)
 }
 
 
+#if 0
 #pragma optimize("", off)  
 __m256 juliaSimd(Complex8& A)
 {
@@ -106,7 +108,10 @@ __m256 juliaSimd(Complex8& A)
 
 }
 #pragma optimize("", on)  
+#endif
 // normal 
+
+#if 0
 void renderJuliaSet(SDL_Renderer* renderer) 
 {
     for (int y = 0; y < HEIGHT; ++y) 
@@ -159,7 +164,7 @@ void renderJuliaSetSimd(SDL_Renderer* renderer)
         }
     }
 }
-
+#endif 
 
 void renderJuliaSetWithCuda(SDL_Renderer* renderer, uint32_t* pixels)
 {
@@ -180,7 +185,7 @@ void render(SDL_Renderer* renderer, float* rValues, float* gValues, float* bValu
 {
 
     //renderRGBCuda(rValues, gValues, WIDTH, HEIGHT);
-	renderSphereCuda(rValues, gValues, bValues, WIDTH, HEIGHT, CameraDistance, 0);
+	renderSphereCuda(rValues, gValues, bValues, WIDTH, HEIGHT, CameraDistance, CameraHeight);
 
 	for (int y = 0; y < HEIGHT; ++y)
 	{
@@ -265,6 +270,15 @@ int main()
                 {
 					CameraDistance += 0.1f; // 카메라 거리를 늘려줍니다.
                 }
+				else if (event.key.keysym.sym == SDLK_LEFT)
+				{
+                    CameraHeight -= 0.1f;
+				}
+                else if (event.key.keysym.sym == SDLK_RIGHT)
+                {
+					CameraHeight += 0.1f;
+                }
+
             }
         }
 

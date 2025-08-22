@@ -10,6 +10,7 @@
 struct CuRay;
 
 #define M_PI (3.14159265358979323846)
+#define MAX_BOUNCES 3
 
 __device__ inline float3 Unit(const float3& InValue);
 __device__ float3 GetColor(const CuRay& ray);
@@ -17,6 +18,7 @@ __device__ float Dot(const float3& lhs, const float3& rhs);
 __device__ inline float3 Cross(const float3& lhs, const float3& rhs);
 __device__ inline float3 operator+(const float3& lhs, const float3& rhs);
 __device__ inline float3 operator-(const float3& lhs, const float3& rhs);
+__device__ inline float3 operator-(const float3& rhs);
 __device__ inline float3 operator*(const float3& lhs, const float f);
 __device__ inline float3 operator*(const float f, const float3& rhs);
 __device__ inline float3 operator/(const float3& lhs, const float f);
@@ -129,6 +131,20 @@ private:
 	float mImageWidth = 1024;
 	float mImageHeight = 512;
 };
+
+
+__device__ bool MetalScatter(const CuRay& rayIn, const CuHitRecord& hitRecord, float3& attenuation, CuRay& scattered, curandState* state);
+
+__device__ inline float3 RandomUnitVectorInHemisphere(const float3& normal, curandState* state)
+{
+	float3 inUnitSphere = RandomUnitVector(state);
+	if (Dot(inUnitSphere, normal) < 0.0f)
+	{
+		inUnitSphere = -inUnitSphere; // Ensure the vector is in the hemisphere defined by the normal
+	}
+	return inUnitSphere;
+}
+
 
 void add_arrays(const int *a, const int *b, int *c, int size);
 
