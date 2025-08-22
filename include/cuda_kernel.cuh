@@ -18,6 +18,7 @@ __device__ float Dot(const float3& lhs, const float3& rhs);
 __device__ inline float3 Cross(const float3& lhs, const float3& rhs);
 __device__ inline float3 operator+(const float3& lhs, const float3& rhs);
 __device__ inline float3 operator-(const float3& lhs, const float3& rhs);
+__device__ inline float3 operator*(const float3& lhs, const float3& rhs);
 __device__ inline float3 operator-(const float3& rhs);
 __device__ inline float3 operator*(const float3& lhs, const float f);
 __device__ inline float3 operator*(const float f, const float3& rhs);
@@ -151,22 +152,38 @@ __device__ __forceinline__ float3 GetSkyColor(const CuRay& ray)
 	return (1.0f - t) * make_float3(1.0f, 1.0f, 1.0f) + t * make_float3(0.5f, 0.7f, 1.0f);
 }
 
-/*__device__ float3 RayColor(const CuRay& ray, CuSphere* sphereList, curandState* state)
+__device__ __forceinline__ float3 RayColor(const CuRay& ray, CuSphere& sphere, CuSphere& sphereGreen)
 {
-	CuHitRecord hitRecord;
-	float3 attenuation = make_float3(1.0f, 1.0f, 1.0f);
-	CuRay scattered;
+	CuRay currentRay = ray;	
+	float3 throughput = make_float3(1.0f, 1.0f, 1.0f);
 
-	#pragma unroll MAX_BOUNCES
-	for (int bounces = 0; bounces < MAX_BOUNCES; ++bounces)
+	for (int depth = 0; depth < MAX_BOUNCES; ++depth)
 	{
-
-		
+		CuHitRecord hitRecord;
+		if (sphere.Hit(currentRay, hitRecord, 0.001f, 1000.0f) 
+			|| sphereGreen.Hit(currentRay, hitRecord, 0.001f, 1000.0f))
+		{
+			CuRay scattered;
+			float3 attenuation;
+			if (MetalScatter(currentRay, hitRecord, attenuation, scattered, nullptr)) // Assuming curandState is not used here
+			{
+				throughput = throughput * attenuation;
+				currentRay = scattered;
+			}
+			else
+			{
+				return make_float3(0, 0, 0);
+			}
+		}
+		else
+		{
+			return throughput * GetSkyColor(currentRay);
+		}
 	}
 
-	return make_float3(0.0f, 0.0f, 0.0f); // Default return value
+	return throughput * GetSkyColor(currentRay);
 }
-*/
+
 
 
 void add_arrays(const int *a, const int *b, int *c, int size);

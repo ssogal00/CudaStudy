@@ -139,6 +139,14 @@ __device__ float3 operator*(const float f, const float3& rhs)
     return result;
 }
 
+__device__ float3 operator*(const float3& lhs, const float3& rhs)
+{
+    float3 result;
+    result.x = rhs.x * lhs.x;
+    result.y = rhs.y * lhs.y;
+    result.z = rhs.z * lhs.z;
+    return result;
+}
 __device__ float3 operator/(const float3& lhs, const float f)
 {
 	if (f == 0.0f) 
@@ -255,10 +263,18 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
 
     float t = -1;
 	CuHitRecord hitRecord;
-    
+
+	float3 throughput = make_float3(1.0f, 1.0f, 1.0f);
+
+	CuRay r = cameraRay;
+
+	float3 finalColor = RayColor(cameraRay, sphere, sphereGreen); // Get the color from the ray tracing function
     //
-    //if(sphere.Intersect(cameraRay, t))
-	if (sphere.Hit(cameraRay, hitRecord, 0.001f, 1000.0f))
+	redValues[x + y * width] = finalColor.x; // Assign the color to the pixel
+    greenValues[x + y * width] = finalColor.y; // Assign the color to the pixel
+    blueValues[x + y * width] = finalColor.z; // Assign the color to the pixel
+	/*
+    if (sphere.Hit(cameraRay, hitRecord, 0.001f, 1000.0f))
 	{
 		// Hit the sphere
 		redValues[x + y * width] = 1;
@@ -273,12 +289,12 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
 	}
     else
     {
-        float3 Color = cameraRay.mDir;
-        redValues[x + y * width] = 0;// fmaxf(Color.x, 0);
-        greenValues[x + y * width] = fmaxf(Color.y,0);
-        blueValues[x + y * width] = 0;
+		float3 Color = GetSkyColor(cameraRay);
+        redValues[x + y * width] = Color.x;// fmaxf(Color.x, 0);
+        greenValues[x + y * width] = Color.y;
+        blueValues[x + y * width] = Color.z;
     }
-
+    */
 
 }
 
