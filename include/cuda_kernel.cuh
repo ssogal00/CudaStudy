@@ -145,6 +145,29 @@ __device__ inline float3 RandomUnitVectorInHemisphere(const float3& normal, cura
 	return inUnitSphere;
 }
 
+__device__ __forceinline__ float3 GetSkyColor(const CuRay& ray)
+{
+	float t = 0.5f * (ray.mDir.y + 1.0f);
+	return (1.0f - t) * make_float3(1.0f, 1.0f, 1.0f) + t * make_float3(0.5f, 0.7f, 1.0f);
+}
+
+/*__device__ float3 RayColor(const CuRay& ray, CuSphere* sphereList, curandState* state)
+{
+	CuHitRecord hitRecord;
+	float3 attenuation = make_float3(1.0f, 1.0f, 1.0f);
+	CuRay scattered;
+
+	#pragma unroll MAX_BOUNCES
+	for (int bounces = 0; bounces < MAX_BOUNCES; ++bounces)
+	{
+
+		
+	}
+
+	return make_float3(0.0f, 0.0f, 0.0f); // Default return value
+}
+*/
+
 
 void add_arrays(const int *a, const int *b, int *c, int size);
 

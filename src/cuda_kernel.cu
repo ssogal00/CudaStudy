@@ -29,24 +29,34 @@ __device__ bool CuSphere::Intersect(const CuRay& ray, float& t) const
 }
 __device__ bool CuSphere::Hit(const CuRay& ray, CuHitRecord& hitRecord, float tMin, float tMax) const
 {
-    float3 oc = ray.mOrigin - mOrigin;
+    float3 oc = mOrigin - ray.mOrigin;
     float a = Dot(ray.mDir, ray.mDir);
-    float b = 2.0f * Dot(oc, ray.mDir);
+	float h = Dot(oc, ray.mDir);
     float c = Dot(oc, oc) - mRadius * mRadius;
-    float discriminant = b*b - 4*a*c;
+	float discriminant = h * h - a * c;
 
-    if (discriminant > 0)
+    if (discriminant < 0)
     {
-        float t = (-b - sqrtf(discriminant)) / a;
-        if (t < tMax && t > tMin)
-        {
-            hitRecord.mT = t;
-            hitRecord.mPoint = ray.At(t);
-            hitRecord.mNormal = Unit((hitRecord.mPoint - mOrigin) / mRadius);
-            return true;
-        }
-    }
-	return false;
+        return false;
+    }   
+	float sqrtd = sqrtf(discriminant);
+
+	// Find the nearest root that lies in the acceptable range
+	float root = (h - sqrtd) / a;
+	if (root < tMin || root > tMax)
+	{
+		root = (h + sqrtd) / a;
+		if (root < tMin || root > tMax)
+		{
+			return false;
+		}
+	}
+
+	hitRecord.mPoint = ray.At(root);
+	hitRecord.mNormal = Unit(hitRecord.mPoint - mOrigin);
+	hitRecord.mT = root;
+
+	return true;
 }
 
 __device__ CuRay CuCamera::GetRay(float u, float v) const
@@ -218,6 +228,8 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
 
 	CuSphere sphere(make_float3(0.0f, -0.00f, -1.00f), 0.1f);
     CuSphere sphereGreen(make_float3(0.20f, -0.00f, -1.00f), 0.1f);
+
+	CuSphere* spheres[] = { &sphere, &sphereGreen };
 
 	CuCamera mainCamera{
 		make_float3(0.0f, CameraHeight, CameraDistance), // Camera position
