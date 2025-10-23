@@ -214,7 +214,9 @@ void renderJuliaSetCuda(uint32_t* pixels, int width, int height, float C_Real, f
 
 void renderRGBCuda(float* redValues, float* greenValues, int width, int height);
 
-void renderSphereCuda(float* redValues, float* greenValues, float* blueValues, int width, int height, float fCameraDistance, float fCameraHeight);
+void renderSphereCuda(
+	float* redValues, float* greenValues, float* blueValues, 
+	int width, int height, float fCameraDistance, float fCameraHeight, unsigned long long frameCount);
 
 extern float* d_redValues;
 extern float* d_greenValues;
@@ -225,4 +227,5 @@ extern float* d_accum_blue;
 
 extern curandState* d_randomState;
 
+extern unsigned long long FrameCount;
 #endif // CUDA_KERNEL_CUH

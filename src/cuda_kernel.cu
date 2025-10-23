@@ -10,6 +10,8 @@ float* d_accum_blue;
 
 curandState* d_randomState;
 
+unsigned long long FrameCount = 0;
+
 __device__ float3 CuRay::At(float t) const
 {
     float3 result;
@@ -253,10 +255,16 @@ __global__ void renderRGBCudaKernel(float* redValues, float* greenValues, int wi
     greenValues[x + y * width] = static_cast<float>(y) / height;
 }
 
-__global__ void renderSphereKernel(float* redValues, float* greenValues, float* blueValues, int width, int height, float CameraDistance, float CameraHeight, curandState* state)
+__global__ void renderSphereKernel(float* redValues, float* greenValues, float* blueValues, 
+	float* accum_red, float* accum_green, float* accum_blue,
+    int width, int height, float CameraDistance, float CameraHeight, curandState* state, 
+    unsigned long long frameCount)
 {
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+    int id = y * width + x;
+	curandState* localState = &state[id];
 
 	CuSphere sphere(make_float3(0.0f, -0.00f, -1.00f), 0.1f);
     CuSphere sphereGreen(make_float3(0.20f, -0.00f, -1.00f), 0.1f);
@@ -285,40 +293,25 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
 	dummyRay.mDir = Unit(upperLeft + u * horizontal - v * vertical);
 	CuRay cameraRay = mainCamera.GetRay(x, y);
 
-    float t = -1;
-	CuHitRecord hitRecord;
-
-	float3 throughput = make_float3(1.0f, 1.0f, 1.0f);
 
 	CuRay r = cameraRay;
 
-	float3 finalColor = RayColor(cameraRay, sphere, sphereGreen,state); // Get the color from the ray tracing function
+	float3 currentFrameColor = RayColor(cameraRay, sphere, sphereGreen, localState); // Get the color from the ray tracing function
+
+	float3 prevAccColor = make_float3(accum_red[id], accum_green[id], accum_blue[id]);
+    float3 newAccumColor = prevAccColor + currentFrameColor;
+    
+    accum_red[id] = newAccumColor.x;
+    accum_green[id] = newAccumColor.y;
+    accum_blue[id] = newAccumColor.z;
+   
+    float3 finalAverageColor = newAccumColor / (float)frameCount;
+
     //
-	redValues[x + y * width] = finalColor.x; // Assign the color to the pixel
-    greenValues[x + y * width] = finalColor.y; // Assign the color to the pixel
-    blueValues[x + y * width] = finalColor.z; // Assign the color to the pixel
-	/*
-    if (sphere.Hit(cameraRay, hitRecord, 0.001f, 1000.0f))
-	{
-		// Hit the sphere
-		redValues[x + y * width] = 1;
-		greenValues[x + y * width] = 0;
-		blueValues[x + y * width] = 0;
-	}
-	else if (sphereGreen.Intersect(cameraRay, t))
-	{
-		redValues[x + y * width] = 0;
-		greenValues[x + y * width] = 1;
-		blueValues[x + y * width] = 0;
-	}
-    else
-    {
-		float3 Color = GetSkyColor(cameraRay);
-        redValues[x + y * width] = Color.x;// fmaxf(Color.x, 0);
-        greenValues[x + y * width] = Color.y;
-        blueValues[x + y * width] = Color.z;
-    }
-    */
+	redValues[x + y * width] = finalAverageColor.x; // Assign the color to the pixel
+    greenValues[x + y * width] = finalAverageColor.y; // Assign the color to the pixel
+    blueValues[x + y * width] = finalAverageColor.z; // Assign the color to the pixel
+	
 
 }
 
@@ -405,13 +398,17 @@ void renderRGBCuda(float* redValues, float* greenValues, int width, int height)
 	cudaFree(d_greenValues);
 }
 
-void renderSphereCuda(float* redValues, float* greenValues, float* blueValues,int width, int height, float fCameraDistance, float fCameraHeight)
+void renderSphereCuda(float* redValues, float* greenValues, float* blueValues,
+    int width, int height, float fCameraDistance, float fCameraHeight,unsigned long long frameCount)
 {
     dim3 dimBlock(32, 32, 1);
     dim3 dimGrid((width) / dimBlock.x, (height) / dimBlock.y, 1);
 
-	SetupRandomState << < dimGrid, dimBlock >> > (d_randomState, time(NULL), width);
-    renderSphereKernel << <dimGrid, dimBlock >> > (d_redValues, d_greenValues, d_blueValues, width, height, fCameraDistance, fCameraHeight, d_randomState);
+	SetupRandomState << < dimGrid, dimBlock >> > (d_randomState, frameCount, width);
+    renderSphereKernel << <dimGrid, dimBlock >> > (
+        d_redValues, d_greenValues, d_blueValues, 
+		d_accum_red, d_accum_blue, d_accum_green,
+        width, height, fCameraDistance, fCameraHeight, d_randomState, frameCount);
 
     cudaDeviceSynchronize();
 

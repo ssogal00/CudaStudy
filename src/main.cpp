@@ -182,6 +182,7 @@ void renderJuliaSetWithCuda(SDL_Renderer* renderer, uint32_t* pixels)
 	}
 }
 
+
 void InitCudaBuffers(int width, int height)
 {
     int numPixels = width * height;
@@ -215,9 +216,18 @@ void ShutdownCuda()
     cudaFree(d_accum_blue);
     cudaFree(d_randomState);
 }
+
+void ResetAccBufferAndFrameCount()
+{
+	cudaMemset(d_accum_red, 0, WIDTH * HEIGHT * sizeof(float));
+	cudaMemset(d_accum_green, 0, WIDTH * HEIGHT * sizeof(float));
+	cudaMemset(d_accum_blue, 0, WIDTH * HEIGHT * sizeof(float));
+	FrameCount = 0;
+}
+
 void render(SDL_Renderer* renderer, float* rValues, float* gValues, float* bValues)
 {
-	renderSphereCuda(rValues, gValues, bValues, WIDTH, HEIGHT, CameraDistance, CameraHeight);
+	renderSphereCuda(rValues, gValues, bValues, WIDTH, HEIGHT, CameraDistance, CameraHeight, FrameCount);
 
 	for (int y = 0; y < HEIGHT; ++y)
 	{
@@ -299,20 +309,23 @@ int main()
                 if (event.key.keysym.sym == SDLK_UP)
                 {
 					CameraDistance -= 0.1f; // 카메라 거리를 줄여줍니다.
+                    ResetAccBufferAndFrameCount();
                 }
                 else if (event.key.keysym.sym == SDLK_DOWN)
                 {
 					CameraDistance += 0.1f; // 카메라 거리를 늘려줍니다.
+                    ResetAccBufferAndFrameCount();
                 }
 				else if (event.key.keysym.sym == SDLK_LEFT)
 				{
                     CameraHeight -= 0.1f;
+                    ResetAccBufferAndFrameCount();
 				}
                 else if (event.key.keysym.sym == SDLK_RIGHT)
                 {
 					CameraHeight += 0.1f;
+                    ResetAccBufferAndFrameCount();
                 }
-
             }
         }
 
@@ -320,8 +333,12 @@ int main()
         SDL_RenderClear(renderer);
 
         auto start = std::chrono::steady_clock::now();
+        
+        FrameCount++;
 
 		render(renderer, PixelsR, PixelsG, PixelsB);
+
+        
 
         auto end = std::chrono::steady_clock::now();
 
