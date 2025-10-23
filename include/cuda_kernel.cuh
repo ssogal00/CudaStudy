@@ -10,7 +10,7 @@
 struct CuRay;
 
 #define M_PI (3.14159265358979323846)
-#define MAX_BOUNCES 3
+#define MAX_BOUNCES 10
 
 __device__ inline float3 Unit(const float3& InValue);
 __device__ float3 GetColor(const CuRay& ray);
@@ -153,46 +153,63 @@ __device__ __forceinline__ float3 GetSkyColor(const CuRay& ray)
 	return (1.0f - t) * make_float3(1.0f, 1.0f, 1.0f) + t * make_float3(0.5f, 0.7f, 1.0f);
 }
 
+
 __device__ __forceinline__ float3 RayColor(const CuRay& ray, CuSphere& sphere, CuSphere& sphereGreen, curandState* state)
 {
-	CuRay currentRay = ray;	
+	CuRay currentRay = ray;
+
+	// 1. 'throughput'이 광선이 누적하는 색상입니다.
 	float3 throughput = make_float3(1.0f, 1.0f, 1.0f);
+
+	// (기존 attenuation 변수는 루프 안으로 이동합니다)
 
 	for (int depth = 0; depth < MAX_BOUNCES; ++depth)
 	{
 		CuHitRecord hitRecord;
 		CuHitRecord tempHitRecord;
 		bool hitAnything = false;
-		float closestSoFar = 1000.0f;
-		float3 color;
+		float closestSoFar = 10000.0f;
+
+		// 2. 'materialAlbedo' (재질 색상) 변수를 선언합니다.
+		//    이 변수는 '최종적으로' 부딪힌 물체의 색상만 저장합니다.
+		float3 materialAlbedo = make_float3(1.0f, 1.0f, 1.0f); // 기본값(흰색)
 
 		// 첫 번째 구체 검사
 		if (sphere.Hit(currentRay, tempHitRecord, 0.001f, closestSoFar))
 		{
 			hitAnything = true;
-			closestSoFar = tempHitRecord.mT; // 가장 가까운 거리 갱신
+			closestSoFar = tempHitRecord.mT;
 			hitRecord = tempHitRecord;
-			color = make_float3(1.0f, 0.0f, 0.0f); // 빨간색
+			materialAlbedo = make_float3(0.9, 0.9, 1); // 빨간색 재질
+
+			// ★ 3. 버그 수정: 여기서 throughput을 곱하지 않습니다!
 		}
 
-		// 두 번째 구체 검사 (if-else가 아님!)
-		// sphereGreen이 sphere보다 더 가까우면 갱신
+		// 두 번째 구체 검사
 		if (sphereGreen.Hit(currentRay, tempHitRecord, 0.001f, closestSoFar))
 		{
 			hitAnything = true;
-			closestSoFar = tempHitRecord.mT; // 가장 가까운 거리 갱신
+			closestSoFar = tempHitRecord.mT;
 			hitRecord = tempHitRecord;
-			color = make_float3(0.0f, 1.0f, 0.0f); // 초록색
+			materialAlbedo = make_float3(0.1f, 0.8f, 0.1f); // 초록색 재질
+
+			// ★ 3. 버그 수정: 여기서 throughput을 곱하지 않습니다!
 		}
 
 		if (hitAnything)
 		{
 			CuRay scattered;
-			float3 attenuation = color;
+			// 'attenuation'은 이제 LambertScatter의 *출력 전용* 변수입니다.
+			// (LambertScatter가 이 값을 {1,1,1}로 설정해 줄 것입니다)
+			float3 attenuation;
+
 			if (LambertScatter(currentRay, hitRecord, attenuation, scattered, state))
 			//if (MetalScatter(currentRay, hitRecord, attenuation, scattered, state))
 			{
-				throughput = throughput * attenuation;
+				// ★ 4. 올바른 로직:
+				//    throughput에 최종적으로 선택된 'materialAlbedo'와
+				//    Lambert가 반환한 'attenuation'을 곱합니다.
+				throughput = throughput * materialAlbedo * attenuation;
 				currentRay = scattered;
 			}
 			else
@@ -202,14 +219,14 @@ __device__ __forceinline__ float3 RayColor(const CuRay& ray, CuSphere& sphere, C
 		}
 		else
 		{
+			// 5. 하늘에 부딪힘
 			return throughput * GetSkyColor(currentRay);
 		}
 	}
 
-	return throughput * GetSkyColor(currentRay);
+	// 최대 바운스 도달
+	return make_float3(0.0f, 0.0f, 0.0f);
 }
-
-
 
 void add_arrays(const int *a, const int *b, int *c, int size);
 
