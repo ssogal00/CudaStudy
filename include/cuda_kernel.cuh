@@ -164,6 +164,7 @@ __device__ __forceinline__ float3 RayColor(const CuRay& ray, CuSphere& sphere, C
 		CuHitRecord tempHitRecord;
 		bool hitAnything = false;
 		float closestSoFar = 1000.0f;
+		float3 color;
 
 		// 첫 번째 구체 검사
 		if (sphere.Hit(currentRay, tempHitRecord, 0.001f, closestSoFar))
@@ -171,6 +172,7 @@ __device__ __forceinline__ float3 RayColor(const CuRay& ray, CuSphere& sphere, C
 			hitAnything = true;
 			closestSoFar = tempHitRecord.mT; // 가장 가까운 거리 갱신
 			hitRecord = tempHitRecord;
+			color = make_float3(1.0f, 0.0f, 0.0f); // 빨간색
 		}
 
 		// 두 번째 구체 검사 (if-else가 아님!)
@@ -180,14 +182,15 @@ __device__ __forceinline__ float3 RayColor(const CuRay& ray, CuSphere& sphere, C
 			hitAnything = true;
 			closestSoFar = tempHitRecord.mT; // 가장 가까운 거리 갱신
 			hitRecord = tempHitRecord;
+			color = make_float3(0.0f, 1.0f, 0.0f); // 초록색
 		}
 
 		if (hitAnything)
 		{
 			CuRay scattered;
-			float3 attenuation;
-			if (MetalScatter(currentRay, hitRecord, attenuation, scattered, state)) // Assuming curandState is not used here
-			//if (LambertScatter(currentRay, hitRecord, attenuation, scattered, state))
+			float3 attenuation = color;
+			if (LambertScatter(currentRay, hitRecord, attenuation, scattered, state))
+			//if (MetalScatter(currentRay, hitRecord, attenuation, scattered, state))
 			{
 				throughput = throughput * attenuation;
 				currentRay = scattered;
