@@ -186,8 +186,8 @@ __device__ __forceinline__ float3 RayColor(const CuRay& ray, CuSphere& sphere, C
 		{
 			CuRay scattered;
 			float3 attenuation;
-			// if (MetalScatter(currentRay, hitRecord, attenuation, scattered, nullptr)) // Assuming curandState is not used here
-			if (LambertScatter(currentRay, hitRecord, attenuation, scattered, state))
+			if (MetalScatter(currentRay, hitRecord, attenuation, scattered, state)) // Assuming curandState is not used here
+			//if (LambertScatter(currentRay, hitRecord, attenuation, scattered, state))
 			{
 				throughput = throughput * attenuation;
 				currentRay = scattered;

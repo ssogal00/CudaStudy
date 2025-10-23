@@ -204,16 +204,16 @@ __device__ bool LambertScatter(const CuRay& rayIn, const CuHitRecord& hitRecord,
     }
     float3 offsetOrigin = hitRecord.mPoint + 0.001f * hitRecord.mNormal; // Offset to avoid self-intersection
     scattered = CuRay(offsetOrigin, Unit(scatterDirection));
-    attenuation = make_float3(1.0f, 1.0f, 1.0f); // Lambertian has no color attenuation
+    attenuation = make_float3(1.0f, 0.0f, 0.0f); // Lambertian has no color attenuation
     return true;
 }
 
 __device__ bool MetalScatter(const CuRay& rayIn, const CuHitRecord& hitRecord, float3& attenuation, CuRay& scattered, curandState* state)
 {
     float3 reflected = Reflect(Unit(rayIn.mDir), hitRecord.mNormal);
-    //float3 offsetOrigin = hitRecord.mPoint;
+	reflected = Unit(reflected) + (0.3f * RandomUnitVector(state)); // Add some fuzziness
     float3 offsetOrigin = hitRecord.mPoint + 0.001f * hitRecord.mNormal; // Offset to avoid self-intersection
-    scattered = CuRay(offsetOrigin, reflected); // Add some fuzziness
+    scattered = CuRay(offsetOrigin, reflected); 
     attenuation = make_float3(1.0f, .0f, .0f); // Metal has no color attenuation
     return (Dot(scattered.mDir, hitRecord.mNormal) > 0.0f);
 }

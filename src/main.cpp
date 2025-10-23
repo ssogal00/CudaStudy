@@ -9,6 +9,7 @@
 #include <complex>
 #include <thread>
 #include "Vector.h"
+#include <iomanip>
 
 std::complex<float> c(-0.29609091f, 0.62491f);  // You can change this constant to get different Julia sets
 std::complex<float> dest(-0.20509091f, 0.71591f);
@@ -344,8 +345,8 @@ int main()
 
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
-		std::cout << "Rendered in " << duration << " ms\n" << std::endl;
-        
+        std::cout << "Rendered in " << duration << " ms\r" << std::flush;
+
         SDL_RenderPresent(renderer);
     }
 
