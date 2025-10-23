@@ -132,6 +132,7 @@ private:
 	float mImageWidth = 1024;
 	float mImageHeight = 512;
 };
+__device__ bool LambertScatter(const CuRay& rayIn, const CuHitRecord& hitRecord, float3& attenuation, CuRay& scattered, curandState* state);
 
 
 __device__ bool MetalScatter(const CuRay& rayIn, const CuHitRecord& hitRecord, float3& attenuation, CuRay& scattered, curandState* state);
@@ -152,7 +153,7 @@ __device__ __forceinline__ float3 GetSkyColor(const CuRay& ray)
 	return (1.0f - t) * make_float3(1.0f, 1.0f, 1.0f) + t * make_float3(0.5f, 0.7f, 1.0f);
 }
 
-__device__ __forceinline__ float3 RayColor(const CuRay& ray, CuSphere& sphere, CuSphere& sphereGreen)
+__device__ __forceinline__ float3 RayColor(const CuRay& ray, CuSphere& sphere, CuSphere& sphereGreen, curandState* state)
 {
 	CuRay currentRay = ray;	
 	float3 throughput = make_float3(1.0f, 1.0f, 1.0f);
@@ -160,12 +161,33 @@ __device__ __forceinline__ float3 RayColor(const CuRay& ray, CuSphere& sphere, C
 	for (int depth = 0; depth < MAX_BOUNCES; ++depth)
 	{
 		CuHitRecord hitRecord;
-		if (sphere.Hit(currentRay, hitRecord, 0.001f, 1000.0f) 
-			|| sphereGreen.Hit(currentRay, hitRecord, 0.001f, 1000.0f))
+		CuHitRecord tempHitRecord;
+		bool hitAnything = false;
+		float closestSoFar = 1000.0f;
+
+		// 첫 번째 구체 검사
+		if (sphere.Hit(currentRay, tempHitRecord, 0.001f, closestSoFar))
+		{
+			hitAnything = true;
+			closestSoFar = tempHitRecord.mT; // 가장 가까운 거리 갱신
+			hitRecord = tempHitRecord;
+		}
+
+		// 두 번째 구체 검사 (if-else가 아님!)
+		// sphereGreen이 sphere보다 더 가까우면 갱신
+		if (sphereGreen.Hit(currentRay, tempHitRecord, 0.001f, closestSoFar))
+		{
+			hitAnything = true;
+			closestSoFar = tempHitRecord.mT; // 가장 가까운 거리 갱신
+			hitRecord = tempHitRecord;
+		}
+
+		if (hitAnything)
 		{
 			CuRay scattered;
 			float3 attenuation;
-			if (MetalScatter(currentRay, hitRecord, attenuation, scattered, nullptr)) // Assuming curandState is not used here
+			// if (MetalScatter(currentRay, hitRecord, attenuation, scattered, nullptr)) // Assuming curandState is not used here
+			if (LambertScatter(currentRay, hitRecord, attenuation, scattered, state))
 			{
 				throughput = throughput * attenuation;
 				currentRay = scattered;
@@ -193,4 +215,14 @@ void renderJuliaSetCuda(uint32_t* pixels, int width, int height, float C_Real, f
 void renderRGBCuda(float* redValues, float* greenValues, int width, int height);
 
 void renderSphereCuda(float* redValues, float* greenValues, float* blueValues, int width, int height, float fCameraDistance, float fCameraHeight);
+
+extern float* d_redValues;
+extern float* d_greenValues;
+extern float* d_blueValues;
+extern float* d_accum_red;
+extern float* d_accum_green;
+extern float* d_accum_blue;
+
+extern curandState* d_randomState;
+
 #endif // CUDA_KERNEL_CUH

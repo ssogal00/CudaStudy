@@ -23,6 +23,7 @@ const int MAX_ITERATIONS = 75;
 float CameraDistance = 0;
 float CameraHeight = 0;
 
+
 uint32_t julia(float x, float y) 
 {
     std::complex<float> z(x, y);
@@ -181,10 +182,41 @@ void renderJuliaSetWithCuda(SDL_Renderer* renderer, uint32_t* pixels)
 	}
 }
 
+void InitCudaBuffers(int width, int height)
+{
+    int numPixels = width * height;
+
+    // 최종 픽셀 버퍼 할당
+    cudaMalloc((void**)&d_redValues, numPixels * sizeof(float));
+    cudaMalloc((void**)&d_greenValues, numPixels * sizeof(float));
+    cudaMalloc((void**)&d_blueValues, numPixels * sizeof(float));
+
+    // ★★★ 누적 버퍼 할당 ★★★
+    // (float3로 한 번에 할당해도 되지만, 일단 코드를 유지합니다)
+    cudaMalloc((void**)&d_accum_red, numPixels * sizeof(float));
+    cudaMalloc((void**)&d_accum_green, numPixels * sizeof(float));
+    cudaMalloc((void**)&d_accum_blue, numPixels * sizeof(float));
+
+    // 랜덤 상태 버퍼 할당
+    cudaMalloc((void**)&d_randomState, numPixels * sizeof(curandState));
+
+    // 처음엔 누적 버퍼를 0으로 초기화
+    cudaMemset(d_accum_red, 0, numPixels * sizeof(float));
+    cudaMemset(d_accum_green, 0, numPixels * sizeof(float));
+    cudaMemset(d_accum_blue, 0, numPixels * sizeof(float));
+}
+void ShutdownCuda()
+{
+    cudaFree(d_redValues);
+    cudaFree(d_greenValues);
+    cudaFree(d_blueValues);
+    cudaFree(d_accum_red);
+    cudaFree(d_accum_green);
+    cudaFree(d_accum_blue);
+    cudaFree(d_randomState);
+}
 void render(SDL_Renderer* renderer, float* rValues, float* gValues, float* bValues)
 {
-
-    //renderRGBCuda(rValues, gValues, WIDTH, HEIGHT);
 	renderSphereCuda(rValues, gValues, bValues, WIDTH, HEIGHT, CameraDistance, CameraHeight);
 
 	for (int y = 0; y < HEIGHT; ++y)
@@ -252,6 +284,8 @@ int main()
     float* PixelsG = new float[WIDTH * HEIGHT];
 	float* PixelsB = new float[WIDTH * HEIGHT];
 
+	InitCudaBuffers(WIDTH, HEIGHT);
+
     while (!quit) 
     {
         while (SDL_PollEvent(&event)) 
@@ -298,6 +332,7 @@ int main()
         SDL_RenderPresent(renderer);
     }
 
+    ShutdownCuda();
 
     // 정리
     SDL_DestroyWindow(window);

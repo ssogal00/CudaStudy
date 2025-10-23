@@ -1,5 +1,14 @@
 #include "cuda_kernel.cuh"
+#include <vector_functions.h> // 필요시 명시적 포함
 
+float* d_redValues;
+float* d_greenValues;
+float* d_blueValues;
+float* d_accum_red;
+float* d_accum_green;
+float* d_accum_blue;
+
+curandState* d_randomState;
 
 __device__ float3 CuRay::At(float t) const
 {
@@ -183,12 +192,27 @@ __device__ float3 Reflect(const float3& v, const float3& n)
 	return Unit(v - 2 * Dot(v, n) * n);
 }
 
+__device__ bool LambertScatter(const CuRay& rayIn, const CuHitRecord& hitRecord, float3& attenuation, CuRay& scattered, curandState* state)
+{
+    float3 scatterDirection = hitRecord.mNormal + RandomUnitVector(state);
+    // Catch degenerate scatter direction
+    if (Dot(scatterDirection, scatterDirection) < 1e-8)
+    {
+        scatterDirection = hitRecord.mNormal;
+    }
+    float3 offsetOrigin = hitRecord.mPoint + 0.001f * hitRecord.mNormal; // Offset to avoid self-intersection
+    scattered = CuRay(offsetOrigin, Unit(scatterDirection));
+    attenuation = make_float3(1.0f, 1.0f, 1.0f); // Lambertian has no color attenuation
+    return true;
+}
 
 __device__ bool MetalScatter(const CuRay& rayIn, const CuHitRecord& hitRecord, float3& attenuation, CuRay& scattered, curandState* state)
 {
     float3 reflected = Reflect(Unit(rayIn.mDir), hitRecord.mNormal);
-    scattered = CuRay(hitRecord.mPoint, reflected); // Add some fuzziness
-    attenuation = make_float3(1.0f, 1.0f, 1.0f); // Metal has no color attenuation
+    //float3 offsetOrigin = hitRecord.mPoint;
+    float3 offsetOrigin = hitRecord.mPoint + 0.001f * hitRecord.mNormal; // Offset to avoid self-intersection
+    scattered = CuRay(offsetOrigin, reflected); // Add some fuzziness
+    attenuation = make_float3(1.0f, .0f, .0f); // Metal has no color attenuation
     return (Dot(scattered.mDir, hitRecord.mNormal) > 0.0f);
 }
 
@@ -229,7 +253,7 @@ __global__ void renderRGBCudaKernel(float* redValues, float* greenValues, int wi
     greenValues[x + y * width] = static_cast<float>(y) / height;
 }
 
-__global__ void renderSphereKernel(float* redValues, float* greenValues, float* blueValues, int width, int height, float CameraDistance, float CameraHeight)
+__global__ void renderSphereKernel(float* redValues, float* greenValues, float* blueValues, int width, int height, float CameraDistance, float CameraHeight, curandState* state)
 {
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -268,7 +292,7 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
 
 	CuRay r = cameraRay;
 
-	float3 finalColor = RayColor(cameraRay, sphere, sphereGreen); // Get the color from the ray tracing function
+	float3 finalColor = RayColor(cameraRay, sphere, sphereGreen,state); // Get the color from the ray tracing function
     //
 	redValues[x + y * width] = finalColor.x; // Assign the color to the pixel
     greenValues[x + y * width] = finalColor.y; // Assign the color to the pixel
@@ -383,30 +407,15 @@ void renderRGBCuda(float* redValues, float* greenValues, int width, int height)
 
 void renderSphereCuda(float* redValues, float* greenValues, float* blueValues,int width, int height, float fCameraDistance, float fCameraHeight)
 {
-    float* d_redValues, * d_greenValues, * d_blueValues;
-
-	curandState* d_randomState;
-
-	cudaMalloc((void**)&d_randomState, width * height * sizeof(curandState));
-    cudaMalloc((void**)&d_redValues, width * height * sizeof(float));
-    cudaMalloc((void**)&d_greenValues, width * height * sizeof(float));
-    cudaMalloc((void**)&d_blueValues, width * height * sizeof(float));
-
-
     dim3 dimBlock(32, 32, 1);
     dim3 dimGrid((width) / dimBlock.x, (height) / dimBlock.y, 1);
 
 	SetupRandomState << < dimGrid, dimBlock >> > (d_randomState, time(NULL), width);
-    renderSphereKernel << <dimGrid, dimBlock >> > (d_redValues, d_greenValues, d_blueValues, width, height, fCameraDistance, fCameraHeight);
+    renderSphereKernel << <dimGrid, dimBlock >> > (d_redValues, d_greenValues, d_blueValues, width, height, fCameraDistance, fCameraHeight, d_randomState);
 
     cudaDeviceSynchronize();
 
     cudaMemcpy(redValues, d_redValues, width * height * sizeof(float), cudaMemcpyDeviceToHost);
     cudaMemcpy(greenValues, d_greenValues, width * height * sizeof(float), cudaMemcpyDeviceToHost);
     cudaMemcpy(blueValues, d_blueValues, width * height * sizeof(float), cudaMemcpyDeviceToHost);
-
-    cudaFree(d_redValues);
-    cudaFree(d_greenValues);
-    cudaFree(d_blueValues);
-	cudaFree(d_randomState); 
 }

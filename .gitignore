@@ -365,3 +365,4 @@ FodyWeavers.xsd
 # build directory
 build/
 cudaStudyBuild/
+src/Test.natvis
