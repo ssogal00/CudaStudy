@@ -10,7 +10,7 @@
 struct CuRay;
 
 #define M_PI (3.14159265358979323846)
-#define MAX_BOUNCES 10
+#define MAX_BOUNCES 20
 
 __device__ inline float3 Unit(const float3& InValue);
 __device__ float3 GetColor(const CuRay& ray);
@@ -63,7 +63,7 @@ public:
 	float3 mPoint;  // Point of intersection
 	float3 mNormal; // Normal at the intersection point
 	float mT;       // Distance along the ray to the intersection point
-
+	float3 mAlbedo; // Material color
 	__device__ CuHitRecord() 
 		: mPoint{ 0.0f, 0.0f, 0.0f }, mNormal{ 0.0f, 0.0f, 1.0f }, mT{ 0.0f }
 	{
@@ -92,7 +92,9 @@ struct CuSphere
 public:
 	float3 mOrigin;
 	float mRadius;
-	__device__ CuSphere() : mOrigin{ 0.0f, 0.0f, 0.0f }, mRadius{ 1.0f } {}
+	float3 mAlbedo; // Material color
+	__device__ CuSphere() : mOrigin{ 0.0f, 0.0f, 0.0f }, 
+		mRadius{ 1.0f }, mAlbedo{ 1,1,1 } {}
 	__device__ CuSphere(float3 origin, float radius) : mOrigin{ origin }, mRadius{ radius } {}
 	__device__ bool Hit(const CuRay& ray, CuHitRecord& hitRecord, float tMin, float tMax) const;
 	__device__ bool Intersect(const CuRay& ray, float& t) const;	
@@ -154,7 +156,7 @@ __device__ __forceinline__ float3 GetSkyColor(const CuRay& ray)
 }
 
 
-__device__ __forceinline__ float3 RayColor(const CuRay& ray, CuSphere& sphere, CuSphere& sphereGreen, curandState* state)
+__device__ __forceinline__ float3 RayColor(const CuRay& ray, CuSphere& sphereWhite, CuSphere& sphereGreen, curandState* state)
 {
 	CuRay currentRay = ray;
 
@@ -175,7 +177,7 @@ __device__ __forceinline__ float3 RayColor(const CuRay& ray, CuSphere& sphere, C
 		float3 materialAlbedo = make_float3(1.0f, 1.0f, 1.0f); // 기본값(흰색)
 
 		// 첫 번째 구체 검사
-		if (sphere.Hit(currentRay, tempHitRecord, 0.001f, closestSoFar))
+		if (sphereWhite.Hit(currentRay, tempHitRecord, 0.001f, closestSoFar))
 		{
 			hitAnything = true;
 			closestSoFar = tempHitRecord.mT;
@@ -199,17 +201,12 @@ __device__ __forceinline__ float3 RayColor(const CuRay& ray, CuSphere& sphere, C
 		if (hitAnything)
 		{
 			CuRay scattered;
-			// 'attenuation'은 이제 LambertScatter의 *출력 전용* 변수입니다.
-			// (LambertScatter가 이 값을 {1,1,1}로 설정해 줄 것입니다)
 			float3 attenuation;
 
 			if (LambertScatter(currentRay, hitRecord, attenuation, scattered, state))
 			//if (MetalScatter(currentRay, hitRecord, attenuation, scattered, state))
 			{
-				// ★ 4. 올바른 로직:
-				//    throughput에 최종적으로 선택된 'materialAlbedo'와
-				//    Lambert가 반환한 'attenuation'을 곱합니다.
-				throughput = throughput * materialAlbedo * attenuation;
+				throughput = throughput * hitRecord.mAlbedo * attenuation;
 				currentRay = scattered;
 			}
 			else

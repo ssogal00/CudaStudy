@@ -66,7 +66,7 @@ __device__ bool CuSphere::Hit(const CuRay& ray, CuHitRecord& hitRecord, float tM
 	hitRecord.mPoint = ray.At(root);
 	hitRecord.mNormal = Unit(hitRecord.mPoint - mOrigin);
 	hitRecord.mT = root;
-
+	hitRecord.mAlbedo = mAlbedo;
 	return true;
 }
 
@@ -266,10 +266,13 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
     int id = y * width + x;
 	curandState* localState = &state[id];
 
-	CuSphere sphere(make_float3(0.0f, -0.00f, -1.00f), 0.1f);
-    CuSphere sphereGreen(make_float3(0.20f, -0.00f, -1.00f), 0.1f);
+	CuSphere sphereWhite(make_float3(0.0f, -0.00f, -1.00f), 0.1f);
+	sphereWhite.mAlbedo = make_float3(0.9f, 0.9f, 0.9f);
 
-	CuSphere* spheres[] = { &sphere, &sphereGreen };
+    CuSphere sphereGreen(make_float3(0.20f, -0.00f, -1.00f), 0.1f);
+	sphereGreen.mAlbedo = make_float3(0.1f, 0.8f, 0.1f);
+
+	CuSphere* spheres[] = { &sphereWhite, &sphereGreen };
 
 	CuCamera mainCamera{
 		make_float3(CameraHeight, 0, CameraDistance), // Camera position
@@ -296,7 +299,7 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
 
 	CuRay r = cameraRay;
 
-	float3 currentFrameColor = RayColor(cameraRay, sphere, sphereGreen, localState); // Get the color from the ray tracing function
+	float3 currentFrameColor = RayColor(cameraRay, sphereWhite, sphereGreen, localState); // Get the color from the ray tracing function
 
 	float3 prevAccColor = make_float3(accum_red[id], accum_green[id], accum_blue[id]);
     float3 newAccumColor = prevAccColor + currentFrameColor;
