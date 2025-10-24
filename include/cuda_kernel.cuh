@@ -246,9 +246,9 @@ __device__ __forceinline__ float3 RayColorV2(const CuRay& ray, CuSphere* sphereL
 }
 
 __device__ float3 RayColor(const CuRay& ray,
-	const CuSphere& sphereWhite, 
-	const CuSphere& sphereGreen, 
-	const CuSphere& sphereRed,
+	CuSphere sphereWhite, 
+	CuSphere sphereGreen, 
+	CuSphere sphereRed,
 	curandState* state);
 
 void add_arrays(const int *a, const int *b, int *c, int size);

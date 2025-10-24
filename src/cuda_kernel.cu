@@ -7,6 +7,7 @@ float* d_blueValues;
 float* d_accum_red;
 float* d_accum_green;
 float* d_accum_blue;
+CuSphere** d_spheres;
 
 curandState* d_randomState;
 
@@ -113,7 +114,7 @@ __device__ float3 GetRayHitColor(const CuRay& ray)
 
 
 __device__ float3 RayColor(const CuRay& ray,
-	const CuSphere& sphereWhite, const CuSphere& sphereGreen, const CuSphere& sphereRed,
+	CuSphere sphereWhite, CuSphere sphereGreen, CuSphere sphereRed,
 	curandState* state)
 {
 	CuRay currentRay = ray;
@@ -352,8 +353,11 @@ __global__ void renderRGBCudaKernel(float* redValues, float* greenValues, int wi
     greenValues[x + y * width] = static_cast<float>(y) / height;
 }
 
-__global__ void renderSphereKernel(float* redValues, float* greenValues, float* blueValues, 
+__global__ void renderSphereKernel
+(
+	float* redValues, float* greenValues, float* blueValues,
 	float* accum_red, float* accum_green, float* accum_blue,
+	CuSphere** d_spheres,
     int width, int height, float CameraDistance, float CameraHeight, curandState* state, 
     unsigned long long frameCount)
 {
@@ -371,11 +375,9 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
 	sphereWhite.mAlbedo = make_float3(0.9f, 0.9f, .90f);
 	sphereWhite.mMaterialType = MaterialType::METAL;
 
-    CuSphere sphereGreen(make_float3(0.20f, -0.00f, -1.00f), 0.1f);
+	CuSphere sphereGreen(make_float3(0.20f, -0.00f, -1.00f), 0.1f);
 	sphereGreen.mAlbedo = make_float3(0.1f, 0.8f, 0.1f);
 	sphereGreen.mMaterialType = MaterialType::LAMBERTIAN;
-
-	CuSphere* spheres[] = { &sphereGreen , &sphereRed,  &sphereWhite};
 
 	CuCamera mainCamera{
 		make_float3(CameraHeight, 0, CameraDistance), // Camera position
@@ -402,7 +404,7 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
 
 	CuRay r = cameraRay;
 
-	float3 currentFrameColor = RayColor(cameraRay, sphereWhite, sphereGreen, sphereRed, localState); // Get the color from the ray tracing function	
+	float3 currentFrameColor = RayColor(cameraRay, sphereRed, sphereGreen, sphereWhite, localState); // Get the color from the ray tracing function	
 
 	float3 prevAccColor = make_float3(accum_red[id], accum_green[id], accum_blue[id]);
     float3 newAccumColor = prevAccColor + currentFrameColor;
@@ -526,6 +528,11 @@ void renderSphereCuda(float* redValues, float* greenValues, float* blueValues,
 		cudaMemset(d_accum_red, 0, width * height * sizeof(float));
 		cudaMemset(d_accum_green, 0, width * height * sizeof(float));
 		cudaMemset(d_accum_blue, 0, width * height * sizeof(float));
+
+		cudaMalloc((void**)&d_spheres, 3 * sizeof(CuSphere*));
+		cudaMemset(d_spheres, 0, 3 * sizeof(CuSphere*));
+
+		
 	}
 
 	if (!d_randomState)
@@ -534,12 +541,13 @@ void renderSphereCuda(float* redValues, float* greenValues, float* blueValues,
 	}
 
 	// Initialize RNG state (seed with frameCount for progressive changes)
-	SetupRandomState<<<dimGrid, dimBlock>>>(d_randomState, (unsigned long long)time(NULL) + frameCount, width);
+	SetupRandomState<<<dimGrid, dimBlock>>>(d_randomState, frameCount, width);
 
 	// Call kernel (ensure accumulators passed in correct order)
 	renderSphereKernel<<<dimGrid, dimBlock>>>(
 		d_redValues, d_greenValues, d_blueValues,
 		d_accum_red, d_accum_green, d_accum_blue,
+		d_spheres,
 		width, height, fCameraDistance, fCameraHeight, d_randomState, frameCount > 0 ? frameCount : 1ULL);
 
 	checkCudaErrors(cudaDeviceSynchronize());
@@ -547,9 +555,9 @@ void renderSphereCuda(float* redValues, float* greenValues, float* blueValues,
 	
 
 	// Copy results back to host
-	cudaMemcpy(redValues, d_redValues, width * height * sizeof(float), cudaMemcpyDeviceToHost);
-	cudaMemcpy(greenValues, d_greenValues, width * height * sizeof(float), cudaMemcpyDeviceToHost);
-	cudaMemcpy(blueValues, d_blueValues, width * height * sizeof(float), cudaMemcpyDeviceToHost);
+	checkCudaErrors(cudaMemcpy(redValues, d_redValues, width * height * sizeof(float), cudaMemcpyDeviceToHost));
+	checkCudaErrors(cudaMemcpy(greenValues, d_greenValues, width * height * sizeof(float), cudaMemcpyDeviceToHost));
+	checkCudaErrors(cudaMemcpy(blueValues, d_blueValues, width * height * sizeof(float), cudaMemcpyDeviceToHost));
 }
 
 void check_cuda(cudaError_t result, char const* const func, const char* const file, int const line)
