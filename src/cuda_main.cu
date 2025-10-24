@@ -1,3 +1,6 @@
+
+#define SDL_MAIN_HANDLED
+
 #include <iostream>
 #include <time.h>
 #include <float.h>
@@ -9,6 +12,9 @@
 #include "camera.h"
 #include "material.h"
 #include <fstream>
+#include "SDL2/SDL.h"
+#include "SDL2/SDL_render.h"
+#include <chrono>
 
 // limited version of checkCudaErrors from helper_cuda.h in CUDA examples
 #define checkCudaErrors(val) check_cuda( (val), #val, __FILE__, __LINE__ )
@@ -30,7 +36,7 @@ void check_cuda(cudaError_t result, char const* const func, const char* const fi
 __device__ vec3 color(const ray& r, hitable** world, curandState* local_rand_state) {
     ray cur_ray = r;
     vec3 cur_attenuation = vec3(1.0, 1.0, 1.0);
-    for (int i = 0; i < 50; i++) {
+    for (int i = 0; i < 10; i++) {
         hit_record rec;
         if ((*world)->hit(cur_ray, 0.001f, FLT_MAX, rec)) {
             ray scattered;
@@ -111,4 +117,140 @@ __global__ void free_world(hitable** d_list, hitable** d_world, camera** d_camer
     }
     delete* d_world;
     delete* d_camera;
+}
+
+#define WIDTH 1200
+#define HEIGHT 600
+
+int main()
+{
+    int nx = 1200;
+    int ny = 600;
+    int ns = 100;
+    int tx = 8;
+    int ty = 8;
+
+    // SDL 초기화
+    if (SDL_Init(SDL_INIT_VIDEO) < 0)
+    {
+        std::cerr << "SDL 초기화 실패: " << SDL_GetError() << std::endl;
+        return 1;
+    }
+
+    // 윈도우 생성
+    SDL_Window* window = SDL_CreateWindow(
+        "SDL2 Window",                  // 윈도우 제목
+        SDL_WINDOWPOS_UNDEFINED,        // 윈도우 x 위치
+        SDL_WINDOWPOS_UNDEFINED,        // 윈도우 y 위치
+        nx,                            // 윈도우 너비
+        ny,                            // 윈도우 높이
+        SDL_WINDOW_SHOWN                // 윈도우 플래그
+    );
+
+    if (window == nullptr)
+    {
+        std::cerr << "윈도우 생성 실패: " << SDL_GetError() << std::endl;
+        SDL_Quit();
+        return 1;
+    }
+
+    SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+
+    if (renderer == nullptr)
+    {
+        std::cerr << "렌더러 생성 실패: " << SDL_GetError() << std::endl;
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+        return 1;
+    }
+
+    bool quit = false;
+    SDL_Event event;
+
+    int num_pixels = nx * ny;
+    size_t fb_size = num_pixels * sizeof(vec3);
+
+    // allocate FB
+    vec3* fb;
+    checkCudaErrors(cudaMallocManaged((void**)&fb, fb_size));
+
+    // allocate random state
+    curandState* d_rand_state;
+    checkCudaErrors(cudaMalloc((void**)&d_rand_state, num_pixels * sizeof(curandState)));
+
+    // make our world of hitables & the camera
+    hitable** d_list;
+    checkCudaErrors(cudaMalloc((void**)&d_list, 5 * sizeof(hitable*)));
+    hitable** d_world;
+    checkCudaErrors(cudaMalloc((void**)&d_world, sizeof(hitable*)));
+    camera** d_camera;
+    checkCudaErrors(cudaMalloc((void**)&d_camera, sizeof(camera*)));
+    create_world << <1, 1 >> > (d_list, d_world, d_camera, nx, ny);
+    checkCudaErrors(cudaGetLastError());
+    checkCudaErrors(cudaDeviceSynchronize());
+
+    clock_t start, stop;
+    start = clock();
+    // Render our buffer
+    dim3 blocks(nx / tx + 1, ny / ty + 1);
+    dim3 threads(tx, ty);
+    render_init << <blocks, threads >> > (nx, ny, d_rand_state);
+    checkCudaErrors(cudaGetLastError());
+    checkCudaErrors(cudaDeviceSynchronize());
+   
+    
+
+    while (!quit)
+    {
+        while (SDL_PollEvent(&event))
+        {
+            if (event.type == SDL_QUIT)
+            {
+                quit = true;
+            }
+            else if (event.type == SDL_KEYDOWN)
+            {
+                
+            }
+        }
+
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+        SDL_RenderClear(renderer);
+
+        auto start = std::chrono::steady_clock::now();
+
+        render << <blocks, threads >> > (fb, nx, ny, ns, d_camera, d_world, d_rand_state);
+
+        checkCudaErrors(cudaGetLastError());
+        checkCudaErrors(cudaDeviceSynchronize());
+
+        for (int j = 0 ; j < ny; j++) {
+            for (int i = 0; i < nx; i++) {
+                size_t pixel_index = j * nx + i;
+                int ir = int(255.99 * fb[pixel_index].r());
+                int ig = int(255.99 * fb[pixel_index].g());
+                int ib = int(255.99 * fb[pixel_index].b());
+                
+                SDL_SetRenderDrawColor(renderer, ir, ig, ib, 255);
+                SDL_RenderDrawPoint(renderer, i, ny - j -1);
+            }
+        }
+
+        auto end = std::chrono::steady_clock::now();
+
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+
+        std::cout << "Rendered in " << duration << " ms\r" << std::flush;
+
+
+        SDL_RenderPresent(renderer);
+    }
+
+
+    // 정리
+    SDL_DestroyWindow(window);
+    SDL_Quit();
+
+    return 0;
+    return 0;
 }
