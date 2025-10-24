@@ -175,7 +175,7 @@ __device__ float3 RayColor(const CuRay& ray,
 				}
 				else
 				{
-					return make_float3(1, 0, 0);
+					return make_float3(0, 0, 0);
 				}
 			}
 			else if (hitRecord.mMaterialType == METAL)
@@ -192,7 +192,7 @@ __device__ float3 RayColor(const CuRay& ray,
 			}
 			else
 			{
-				return make_float3(1, 0, 0);
+				return make_float3(0, 0, 0);
 			}
 		}
 		else
