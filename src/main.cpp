@@ -1,4 +1,4 @@
-
+#define SDL_MAIN_HANDLED
 
 #include <iostream>
 #include "cuda_kernel.cuh"
@@ -78,7 +78,7 @@ void render(SDL_Renderer* renderer, float* rValues, float* gValues, float* bValu
 	}
 }
 
-/*
+
 int main() 
 {
     // vector test
@@ -192,4 +192,3 @@ int main()
     return 0;
     return 0;
 }
-*/

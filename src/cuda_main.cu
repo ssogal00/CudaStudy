@@ -16,18 +16,6 @@
 #include "SDL2/SDL_render.h"
 #include <chrono>
 
-// limited version of checkCudaErrors from helper_cuda.h in CUDA examples
-#define checkCudaErrors(val) check_cuda( (val), #val, __FILE__, __LINE__ )
-
-void check_cuda(cudaError_t result, char const* const func, const char* const file, int const line) {
-    if (result) {
-        std::cerr << "CUDA error = " << static_cast<unsigned int>(result) << " at " <<
-            file << ":" << line << " '" << func << "' \n";
-        // Make sure we call CUDA Device Reset before exiting
-        cudaDeviceReset();
-        exit(99);
-    }
-}
 
 // Matching the C++ code would recurse enough into color() calls that
 // it was blowing up the stack, so we have to turn this into a
@@ -121,7 +109,7 @@ __global__ void free_world(hitable** d_list, hitable** d_world, camera** d_camer
 
 #define WIDTH 1200
 #define HEIGHT 600
-
+/*
 int main()
 {
     int nx = 1200;
@@ -254,3 +242,4 @@ int main()
     return 0;
     return 0;
 }
+*/

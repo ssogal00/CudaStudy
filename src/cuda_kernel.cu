@@ -513,8 +513,8 @@ void renderSphereCuda(float* redValues, float* greenValues, float* blueValues,
 	// Allocate device buffers if not already allocated
 	if (!d_redValues)
 	{
-		cudaMalloc((void**)&d_redValues, width * height * sizeof(float));
-		cudaMalloc((void**)&d_greenValues, width * height * sizeof(float));
+		checkCudaErrors(cudaMalloc((void**)&d_redValues, width * height * sizeof(float)));
+		checkCudaErrors(cudaMalloc((void**)&d_greenValues, width * height * sizeof(float)));
 		cudaMalloc((void**)&d_blueValues, width * height * sizeof(float));
 
 		// Accumulators for progressive render
@@ -542,10 +542,23 @@ void renderSphereCuda(float* redValues, float* greenValues, float* blueValues,
 		d_accum_red, d_accum_green, d_accum_blue,
 		width, height, fCameraDistance, fCameraHeight, d_randomState, frameCount > 0 ? frameCount : 1ULL);
 
-	cudaDeviceSynchronize();
+	checkCudaErrors(cudaDeviceSynchronize());
+
+	
 
 	// Copy results back to host
 	cudaMemcpy(redValues, d_redValues, width * height * sizeof(float), cudaMemcpyDeviceToHost);
 	cudaMemcpy(greenValues, d_greenValues, width * height * sizeof(float), cudaMemcpyDeviceToHost);
 	cudaMemcpy(blueValues, d_blueValues, width * height * sizeof(float), cudaMemcpyDeviceToHost);
+}
+
+void check_cuda(cudaError_t result, char const* const func, const char* const file, int const line)
+{
+	if (result) {
+		std::cerr << "CUDA error = " << static_cast<unsigned int>(result) << " at " <<
+			file << ":" << line << " '" << func << "' \n";
+		// Make sure we call CUDA Device Reset before exiting
+		cudaDeviceReset();
+		exit(99);
+	}
 }

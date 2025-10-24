@@ -6,11 +6,18 @@
 #include <cmath>
 #include <math.h>
 #include <curand_kernel.h>
+#include <iostream>
 
 struct CuRay;
 
 #define M_PI (3.14159265358979323846)
 #define MAX_BOUNCES 5
+
+void check_cuda(cudaError_t result, char const* const func, const char* const file, int const line);
+
+
+// limited version of checkCudaErrors from helper_cuda.h in CUDA examples
+#define checkCudaErrors(val) check_cuda( (val), #val, __FILE__, __LINE__ )
 
 
 enum MaterialType
@@ -57,7 +64,7 @@ __device__ inline float3 RandomUnitVector(curandState* state)
 	float x = r * cosf(theta);
 	float y = r * sinf(theta);
 
-	return make_float3(x, y, z);
+	return Unit(make_float3(x, y, z));
 }
 
 __global__ void SetupRandomState(curandState* state, unsigned long long seed, int idx);
