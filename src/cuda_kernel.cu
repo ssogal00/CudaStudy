@@ -353,6 +353,24 @@ __global__ void renderRGBCudaKernel(float* redValues, float* greenValues, int wi
     greenValues[x + y * width] = static_cast<float>(y) / height;
 }
 
+__global__ void createSpheres(CuSphere** d_spheres)
+{
+	if (threadIdx.x == 0 && blockIdx.x == 0)
+	{
+		d_spheres[0] = new CuSphere(make_float3(-0.20f, -0.00f, -1.00f), 0.1f);
+		d_spheres[0]->mAlbedo = make_float3(0.8f, 0.1f, 0.1f);
+		d_spheres[0]->mMaterialType = MaterialType::LAMBERTIAN;
+
+		d_spheres[1] = new CuSphere(make_float3(0.0f, -0.00f, -1.00f), 0.1f);
+		d_spheres[1]->mAlbedo = make_float3(0.9f, 0.9f, .90f);
+		d_spheres[1]->mMaterialType = MaterialType::METAL;
+
+		d_spheres[2] = new CuSphere(make_float3(0.20f, -0.00f, -1.00f), 0.1f);
+		d_spheres[2]->mAlbedo = make_float3(0.1f, 0.8f, 0.1f);
+		d_spheres[2]->mMaterialType = MaterialType::LAMBERTIAN;
+	}
+}
+
 __global__ void renderSphereKernel
 (
 	float* redValues, float* greenValues, float* blueValues,
@@ -401,10 +419,7 @@ __global__ void renderSphereKernel
 	dummyRay.mDir = Unit(upperLeft + u * horizontal - v * vertical);
 	CuRay cameraRay = mainCamera.GetRay(x, y);
 
-
-	CuRay r = cameraRay;
-
-	float3 currentFrameColor = RayColor(cameraRay, sphereRed, sphereGreen, sphereWhite, localState); // Get the color from the ray tracing function	
+	float3 currentFrameColor = RayColor(cameraRay, *d_spheres[0], *d_spheres[1], *d_spheres[2], localState); // Get the color from the ray tracing function	
 
 	float3 prevAccColor = make_float3(accum_red[id], accum_green[id], accum_blue[id]);
     float3 newAccumColor = prevAccColor + currentFrameColor;
@@ -529,10 +544,13 @@ void renderSphereCuda(float* redValues, float* greenValues, float* blueValues,
 		cudaMemset(d_accum_green, 0, width * height * sizeof(float));
 		cudaMemset(d_accum_blue, 0, width * height * sizeof(float));
 
-		cudaMalloc((void**)&d_spheres, 3 * sizeof(CuSphere*));
-		cudaMemset(d_spheres, 0, 3 * sizeof(CuSphere*));
+	}
 
-		
+	if (!d_spheres)
+	{
+		checkCudaErrors(cudaMalloc((void**)&d_spheres, 3 * sizeof(CuSphere*)));
+		checkCudaErrors(cudaMemset(d_spheres, 0, 3 * sizeof(CuSphere*)));
+		createSpheres << <1, 1 >> > (d_spheres);
 	}
 
 	if (!d_randomState)
@@ -542,7 +560,7 @@ void renderSphereCuda(float* redValues, float* greenValues, float* blueValues,
 
 	// Initialize RNG state (seed with frameCount for progressive changes)
 	SetupRandomState<<<dimGrid, dimBlock>>>(d_randomState, frameCount, width);
-
+	
 	// Call kernel (ensure accumulators passed in correct order)
 	renderSphereKernel<<<dimGrid, dimBlock>>>(
 		d_redValues, d_greenValues, d_blueValues,
