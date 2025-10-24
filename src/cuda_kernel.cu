@@ -1,5 +1,5 @@
 #include "cuda_kernel.cuh"
-#include <vector_functions.h> // �ʿ�� ������ ����
+#include <vector_functions.h> // 필요시 명시적 포함
 
 float* d_redValues;
 float* d_greenValues;
@@ -67,6 +67,7 @@ __device__ bool CuSphere::Hit(const CuRay& ray, CuHitRecord& hitRecord, float tM
 	hitRecord.mNormal = Unit(hitRecord.mPoint - mOrigin);
 	hitRecord.mT = root;
 	hitRecord.mAlbedo = mAlbedo;
+	hitRecord.mMaterialType = mMaterialType;
 	return true;
 }
 
@@ -109,6 +110,102 @@ __device__ float3 GetRayHitColor(const CuRay& ray)
 {
     
 }
+
+
+__device__ float3 RayColor(const CuRay& ray,
+	const CuSphere& sphereWhite, const CuSphere& sphereGreen, const CuSphere& sphereRed,
+	curandState* state)
+{
+	CuRay currentRay = ray;
+
+	// 1. 'throughput'이 광선이 누적하는 색상입니다.
+	float3 throughput = make_float3(1.0f, 1.0f, 1.0f);
+
+	// (기존 attenuation 변수는 루프 안으로 이동합니다)
+
+	for (int depth = 0; depth < MAX_BOUNCES; ++depth)
+	{
+		CuHitRecord hitRecord;
+		CuHitRecord tempHitRecord;
+		bool hitAnything = false;
+		float closestSoFar = 10000.0f;
+
+		// 첫 번째 구체 검사
+		if (sphereWhite.Hit(currentRay, tempHitRecord, 0.001f, closestSoFar))
+		{
+			hitAnything = true;
+			closestSoFar = tempHitRecord.mT;
+			hitRecord = tempHitRecord;
+
+			// ★ 3. 버그 수정: 여기서 throughput을 곱하지 않습니다!
+		}
+
+		// 두 번째 구체 검사
+		if (sphereGreen.Hit(currentRay, tempHitRecord, 0.001f, closestSoFar))
+		{
+			hitAnything = true;
+			closestSoFar = tempHitRecord.mT;
+			hitRecord = tempHitRecord;
+
+			// ★ 3. 버그 수정: 여기서 throughput을 곱하지 않습니다!
+		}
+		
+		// 세번째 구체 검사
+		/*if (sphereRed.Hit(currentRay, tempHitRecord, 0.001f, closestSoFar))
+		{
+			hitAnything = true;
+			closestSoFar = tempHitRecord.mT;
+			hitRecord = tempHitRecord;
+
+			// ★ 3. 버그 수정: 여기서 throughput을 곱하지 않습니다!
+		}*/
+
+
+		if (hitAnything)
+		{
+			CuRay scattered;
+			float3 attenuation;
+
+			if (hitRecord.mMaterialType == LAMBERTIAN)
+			{
+				if (LambertScatter(currentRay, hitRecord, attenuation, scattered, state))
+				{
+					throughput = throughput * hitRecord.mAlbedo * attenuation;
+					currentRay = scattered;
+				}
+				else
+				{
+					return make_float3(1, 0, 0);
+				}
+			}
+			else if (hitRecord.mMaterialType == METAL)
+			{
+				if (MetalScatter(currentRay, hitRecord, attenuation, scattered, state))
+				{
+					throughput = throughput * hitRecord.mAlbedo;
+					currentRay = scattered;
+				}
+				else
+				{
+					return make_float3(0, 0, 0);
+				}
+			}
+			else
+			{
+				return make_float3(1, 0, 0);
+			}
+		}
+		else
+		{
+			// 5. 하늘에 부딪힘
+			return throughput * GetSkyColor(currentRay);
+		}
+	}
+
+	// 최대 바운스 도달
+	return make_float3(0, 0, 0);
+}
+
 
 __device__ float3 GetColor(const CuRay& ray)
 {
@@ -211,10 +308,10 @@ __device__ bool LambertScatter(const CuRay& rayIn, const CuHitRecord& hitRecord,
 __device__ bool MetalScatter(const CuRay& rayIn, const CuHitRecord& hitRecord, float3& attenuation, CuRay& scattered, curandState* state)
 {
     float3 reflected = Reflect(Unit(rayIn.mDir), hitRecord.mNormal);
-	reflected = Unit(reflected) + (0.1 * RandomUnitVector(state)); // Add some fuzziness
+	reflected = Unit(reflected) + (0.051 * RandomUnitVector(state)); // Add some fuzziness
     float3 offsetOrigin = hitRecord.mPoint + 0.001f * hitRecord.mNormal; // Offset to avoid self-intersection
     scattered = CuRay(offsetOrigin, reflected); 
-    attenuation = make_float3(1.0f, 1.0f, 1.0f); // Metal has no color attenuation
+	attenuation = hitRecord.mAlbedo; // Metal takes on the color of its albedo
     return (Dot(scattered.mDir, hitRecord.mNormal) > 0.0f);
 }
 
@@ -266,13 +363,19 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
     int id = y * width + x;
 	curandState* localState = &state[id];
 
+	CuSphere sphereRed(make_float3(-0.20f, -0.00f, -1.00f), 0.1f);
+	sphereRed.mAlbedo = make_float3(0.8f, 0.1f, 0.1f);
+	sphereRed.mMaterialType = MaterialType::LAMBERTIAN;
+
 	CuSphere sphereWhite(make_float3(0.0f, -0.00f, -1.00f), 0.1f);
-	sphereWhite.mAlbedo = make_float3(0.9f, 0.9f, 0.9f);
+	sphereWhite.mAlbedo = make_float3(0.9f, 0.9f, .90f);
+	sphereWhite.mMaterialType = MaterialType::METAL;
 
     CuSphere sphereGreen(make_float3(0.20f, -0.00f, -1.00f), 0.1f);
 	sphereGreen.mAlbedo = make_float3(0.1f, 0.8f, 0.1f);
+	sphereGreen.mMaterialType = MaterialType::LAMBERTIAN;
 
-	CuSphere* spheres[] = { &sphereWhite, &sphereGreen };
+	CuSphere* spheres[] = { &sphereGreen , &sphereRed,  &sphereWhite};
 
 	CuCamera mainCamera{
 		make_float3(CameraHeight, 0, CameraDistance), // Camera position
@@ -299,7 +402,7 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
 
 	CuRay r = cameraRay;
 
-	float3 currentFrameColor = RayColor(cameraRay, sphereWhite, sphereGreen, localState); // Get the color from the ray tracing function
+	float3 currentFrameColor = RayColor(cameraRay, sphereWhite, sphereGreen, sphereRed, localState); // Get the color from the ray tracing function	
 
 	float3 prevAccColor = make_float3(accum_red[id], accum_green[id], accum_blue[id]);
     float3 newAccumColor = prevAccColor + currentFrameColor;
@@ -404,18 +507,45 @@ void renderRGBCuda(float* redValues, float* greenValues, int width, int height)
 void renderSphereCuda(float* redValues, float* greenValues, float* blueValues,
     int width, int height, float fCameraDistance, float fCameraHeight,unsigned long long frameCount)
 {
-    dim3 dimBlock(32, 32, 1);
-    dim3 dimGrid((width) / dimBlock.x, (height) / dimBlock.y, 1);
+	dim3 dimBlock(32, 32, 1);
+	dim3 dimGrid((width + dimBlock.x - 1) / dimBlock.x, (height + dimBlock.y - 1) / dimBlock.y, 1);
 
-	SetupRandomState << < dimGrid, dimBlock >> > (d_randomState, frameCount, width);
-    renderSphereKernel << <dimGrid, dimBlock >> > (
-        d_redValues, d_greenValues, d_blueValues, 
-		d_accum_red, d_accum_blue, d_accum_green,
-        width, height, fCameraDistance, fCameraHeight, d_randomState, frameCount);
+	// Allocate device buffers if not already allocated
+	if (!d_redValues)
+	{
+		cudaMalloc((void**)&d_redValues, width * height * sizeof(float));
+		cudaMalloc((void**)&d_greenValues, width * height * sizeof(float));
+		cudaMalloc((void**)&d_blueValues, width * height * sizeof(float));
 
-    cudaDeviceSynchronize();
+		// Accumulators for progressive render
+		cudaMalloc((void**)&d_accum_red, width * height * sizeof(float));
+		cudaMalloc((void**)&d_accum_green, width * height * sizeof(float));
+		cudaMalloc((void**)&d_accum_blue, width * height * sizeof(float));
 
-    cudaMemcpy(redValues, d_redValues, width * height * sizeof(float), cudaMemcpyDeviceToHost);
-    cudaMemcpy(greenValues, d_greenValues, width * height * sizeof(float), cudaMemcpyDeviceToHost);
-    cudaMemcpy(blueValues, d_blueValues, width * height * sizeof(float), cudaMemcpyDeviceToHost);
+		// Initialize accumulators to zero
+		cudaMemset(d_accum_red, 0, width * height * sizeof(float));
+		cudaMemset(d_accum_green, 0, width * height * sizeof(float));
+		cudaMemset(d_accum_blue, 0, width * height * sizeof(float));
+	}
+
+	if (!d_randomState)
+	{
+		cudaMalloc((void**)&d_randomState, width * height * sizeof(curandState));
+	}
+
+	// Initialize RNG state (seed with frameCount for progressive changes)
+	SetupRandomState<<<dimGrid, dimBlock>>>(d_randomState, (unsigned long long)time(NULL) + frameCount, width);
+
+	// Call kernel (ensure accumulators passed in correct order)
+	renderSphereKernel<<<dimGrid, dimBlock>>>(
+		d_redValues, d_greenValues, d_blueValues,
+		d_accum_red, d_accum_green, d_accum_blue,
+		width, height, fCameraDistance, fCameraHeight, d_randomState, frameCount > 0 ? frameCount : 1ULL);
+
+	cudaDeviceSynchronize();
+
+	// Copy results back to host
+	cudaMemcpy(redValues, d_redValues, width * height * sizeof(float), cudaMemcpyDeviceToHost);
+	cudaMemcpy(greenValues, d_greenValues, width * height * sizeof(float), cudaMemcpyDeviceToHost);
+	cudaMemcpy(blueValues, d_blueValues, width * height * sizeof(float), cudaMemcpyDeviceToHost);
 }

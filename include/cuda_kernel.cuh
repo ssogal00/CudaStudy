@@ -10,7 +10,14 @@
 struct CuRay;
 
 #define M_PI (3.14159265358979323846)
-#define MAX_BOUNCES 20
+#define MAX_BOUNCES 5
+
+
+enum MaterialType
+{
+	LAMBERTIAN,
+	METAL
+};
 
 __device__ inline float3 Unit(const float3& InValue);
 __device__ float3 GetColor(const CuRay& ray);
@@ -56,7 +63,6 @@ __device__ inline float3 RandomUnitVector(curandState* state)
 __global__ void SetupRandomState(curandState* state, unsigned long long seed, int idx);
 
 
-
 struct CuHitRecord
 {
 public:
@@ -64,6 +70,8 @@ public:
 	float3 mNormal; // Normal at the intersection point
 	float mT;       // Distance along the ray to the intersection point
 	float3 mAlbedo; // Material color
+	MaterialType mMaterialType;
+
 	__device__ CuHitRecord() 
 		: mPoint{ 0.0f, 0.0f, 0.0f }, mNormal{ 0.0f, 0.0f, 1.0f }, mT{ 0.0f }
 	{
@@ -93,6 +101,8 @@ public:
 	float3 mOrigin;
 	float mRadius;
 	float3 mAlbedo; // Material color
+	MaterialType mMaterialType = LAMBERTIAN;
+
 	__device__ CuSphere() : mOrigin{ 0.0f, 0.0f, 0.0f }, 
 		mRadius{ 1.0f }, mAlbedo{ 1,1,1 } {}
 	__device__ CuSphere(float3 origin, float radius) : mOrigin{ origin }, mRadius{ radius } {}
@@ -155,8 +165,7 @@ __device__ __forceinline__ float3 GetSkyColor(const CuRay& ray)
 	return (1.0f - t) * make_float3(1.0f, 1.0f, 1.0f) + t * make_float3(0.5f, 0.7f, 1.0f);
 }
 
-
-__device__ __forceinline__ float3 RayColor(const CuRay& ray, CuSphere& sphereWhite, CuSphere& sphereGreen, curandState* state)
+__device__ __forceinline__ float3 RayColorV2(const CuRay& ray, CuSphere* sphereList, const int sphereNum, curandState* state)
 {
 	CuRay currentRay = ray;
 
@@ -164,7 +173,6 @@ __device__ __forceinline__ float3 RayColor(const CuRay& ray, CuSphere& sphereWhi
 	float3 throughput = make_float3(1.0f, 1.0f, 1.0f);
 
 	// (기존 attenuation 변수는 루프 안으로 이동합니다)
-
 	for (int depth = 0; depth < MAX_BOUNCES; ++depth)
 	{
 		CuHitRecord hitRecord;
@@ -172,30 +180,17 @@ __device__ __forceinline__ float3 RayColor(const CuRay& ray, CuSphere& sphereWhi
 		bool hitAnything = false;
 		float closestSoFar = 10000.0f;
 
-		// 2. 'materialAlbedo' (재질 색상) 변수를 선언합니다.
-		//    이 변수는 '최종적으로' 부딪힌 물체의 색상만 저장합니다.
-		float3 materialAlbedo = make_float3(1.0f, 1.0f, 1.0f); // 기본값(흰색)
-
-		// 첫 번째 구체 검사
-		if (sphereWhite.Hit(currentRay, tempHitRecord, 0.001f, closestSoFar))
+		for (int i = 0; i < sphereNum; ++i)
 		{
-			hitAnything = true;
-			closestSoFar = tempHitRecord.mT;
-			hitRecord = tempHitRecord;
-			materialAlbedo = make_float3(0.9, 0.9, 1); // 빨간색 재질
+			CuSphere& sphere = (sphereList[i]);
+			if (sphere.Hit(currentRay, tempHitRecord, 0.001f, closestSoFar))
+			{
+				hitAnything = true;
+				closestSoFar = tempHitRecord.mT;
+				hitRecord = tempHitRecord;
 
-			// ★ 3. 버그 수정: 여기서 throughput을 곱하지 않습니다!
-		}
-
-		// 두 번째 구체 검사
-		if (sphereGreen.Hit(currentRay, tempHitRecord, 0.001f, closestSoFar))
-		{
-			hitAnything = true;
-			closestSoFar = tempHitRecord.mT;
-			hitRecord = tempHitRecord;
-			materialAlbedo = make_float3(0.1f, 0.8f, 0.1f); // 초록색 재질
-
-			// ★ 3. 버그 수정: 여기서 throughput을 곱하지 않습니다!
+				// ★ 3. 버그 수정: 여기서 throughput을 곱하지 않습니다!
+			}
 		}
 
 		if (hitAnything)
@@ -203,15 +198,33 @@ __device__ __forceinline__ float3 RayColor(const CuRay& ray, CuSphere& sphereWhi
 			CuRay scattered;
 			float3 attenuation;
 
-			if (LambertScatter(currentRay, hitRecord, attenuation, scattered, state))
-			//if (MetalScatter(currentRay, hitRecord, attenuation, scattered, state))
+			if (hitRecord.mMaterialType == LAMBERTIAN)
 			{
-				throughput = throughput * hitRecord.mAlbedo * attenuation;
-				currentRay = scattered;
+				if (LambertScatter(currentRay, hitRecord, attenuation, scattered, state))
+				{
+					throughput = throughput * hitRecord.mAlbedo * attenuation;
+					currentRay = scattered;
+				}
+				else
+				{
+					return make_float3(1, 0, 0);
+				}
+			}
+			else if (hitRecord.mMaterialType == METAL)
+			{
+				if (MetalScatter(currentRay, hitRecord, attenuation, scattered, state))
+				{
+					throughput = throughput * hitRecord.mAlbedo;
+					currentRay = scattered;
+				}
+				else
+				{
+					return make_float3(1, 0, 0);
+				}
 			}
 			else
 			{
-				return make_float3(0, 0, 0);
+				return make_float3(1, 0, 0);
 			}
 		}
 		else
@@ -222,8 +235,14 @@ __device__ __forceinline__ float3 RayColor(const CuRay& ray, CuSphere& sphereWhi
 	}
 
 	// 최대 바운스 도달
-	return make_float3(0.0f, 0.0f, 0.0f);
+	return make_float3(0.0f, .0f, 0.0f);
 }
+
+__device__ float3 RayColor(const CuRay& ray,
+	const CuSphere& sphereWhite, 
+	const CuSphere& sphereGreen, 
+	const CuSphere& sphereRed,
+	curandState* state);
 
 void add_arrays(const int *a, const int *b, int *c, int size);
 
