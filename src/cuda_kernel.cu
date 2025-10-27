@@ -190,7 +190,7 @@ __device__ float3 RayColor(const CuRay& ray,
 			{
 				if (LambertScatter(currentRay, hitRecord, attenuation, scattered, state))
 				{
-					throughput = throughput * hitRecord.mAlbedo * attenuation;
+					throughput = throughput * attenuation;
 					currentRay = scattered;
 				}
 				else
@@ -324,7 +324,8 @@ __device__ bool LambertScatter(const CuRay& rayIn, const CuHitRecord& hitRecord,
 
     float3 offsetOrigin = hitRecord.mPoint + 0.001f * hitRecord.mNormal; // Offset to avoid self-intersection
     scattered = CuRay(offsetOrigin, (scatterDirection));
-    attenuation = make_float3(.90f, .90f, .90f); // Lambertian has no color attenuation
+    //attenuation = make_float3(.90f, .90f, .90f); // Lambertian has no color attenuation
+	attenuation = hitRecord.mAlbedo;
     return true;
 }
 
