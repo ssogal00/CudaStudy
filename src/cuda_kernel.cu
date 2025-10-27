@@ -129,7 +129,7 @@ __device__ float3 RayColor(const CuRay& ray,
 
 	// (기존 attenuation 변수는 루프 안으로 이동합니다)
 
-	for (int depth = 0; depth < 10; ++depth)
+	for (int depth = 0; depth < 2; ++depth)
 	{
 		CuHitRecord hitRecord;
 		CuHitRecord tempHitRecord;
@@ -202,7 +202,7 @@ __device__ float3 RayColor(const CuRay& ray,
 			{
 				if (MetalScatter(currentRay, hitRecord, attenuation, scattered, state))
 				{
-					throughput = throughput * hitRecord.mAlbedo;
+					throughput = throughput * attenuation;
 					currentRay = scattered;
 				}
 				else
@@ -333,7 +333,6 @@ __device__ bool LambertScatter(const CuRay& rayIn, const CuHitRecord& hitRecord,
 __device__ bool MetalScatter(const CuRay& rayIn, const CuHitRecord& hitRecord, float3& attenuation, CuRay& scattered, curandState* state)
 {
     float3 reflected = Reflect(Unit(rayIn.mDir), hitRecord.mNormal);
-	reflected = Unit(reflected) + (0.051 * RandomUnitVector(state)); // Add some fuzziness
     float3 offsetOrigin = hitRecord.mPoint + 0.001f * hitRecord.mNormal; // Offset to avoid self-intersection
     scattered = CuRay(offsetOrigin, reflected); 
 	attenuation = hitRecord.mAlbedo; // Metal takes on the color of its albedo
@@ -394,7 +393,7 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
 
 	CuSphere sphereWhite(make_float3(0.0f, -0.00f, -1.00f), 0.1f);
 	sphereWhite.mAlbedo = make_float3(0.9f, 0.9f, .90f);
-	sphereWhite.mMaterialType = MaterialType::LAMBERTIAN;
+	sphereWhite.mMaterialType = MaterialType::METAL;
 
     CuSphere sphereGreen(make_float3(0.20f, -0.00f, -1.00f), 0.1f);
 	sphereGreen.mAlbedo = make_float3(0.1f, 0.8f, 0.1f);
