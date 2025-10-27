@@ -123,7 +123,7 @@ __device__ float3 RayColor(const CuRay& ray,
 
 	// (기존 attenuation 변수는 루프 안으로 이동합니다)
 
-	for (int depth = 0; depth < MAX_BOUNCES; ++depth)
+	for (int depth = 0; depth < 2; ++depth)
 	{
 		CuHitRecord hitRecord;
 		CuHitRecord tempHitRecord;
@@ -151,20 +151,34 @@ __device__ float3 RayColor(const CuRay& ray,
 		}
 		
 		// 세번째 구체 검사
-		/*if (sphereRed.Hit(currentRay, tempHitRecord, 0.001f, closestSoFar))
+		if (sphereRed.Hit(currentRay, tempHitRecord, 0.001f, closestSoFar))
 		{
 			hitAnything = true;
 			closestSoFar = tempHitRecord.mT;
 			hitRecord = tempHitRecord;
 
 			// ★ 3. 버그 수정: 여기서 throughput을 곱하지 않습니다!
-		}*/
-
+		}
 
 		if (hitAnything)
 		{
 			CuRay scattered;
 			float3 attenuation;
+
+			if (isnan(throughput.x) || isnan(throughput.y) || isnan(throughput.z)) 
+			{
+				return make_float3(1, 0, 0);
+			}
+
+			if (isnan(currentRay.mDir.x) || 
+				isnan(currentRay.mDir.y) || 
+				isnan(currentRay.mDir.z) || 
+				isnan(currentRay.mOrigin.x) ||
+				isnan(currentRay.mOrigin.y) ||
+				isnan(currentRay.mOrigin.z))
+			{
+				return make_float3(1, 0, 0);
+			}
 
 			if (hitRecord.mMaterialType == LAMBERTIAN)
 			{
@@ -187,7 +201,7 @@ __device__ float3 RayColor(const CuRay& ray,
 				}
 				else
 				{
-					return make_float3(0, 0, 0);
+					return make_float3(1, 0, 0);
 				}
 			}
 			else
@@ -199,11 +213,12 @@ __device__ float3 RayColor(const CuRay& ray,
 		{
 			// 5. 하늘에 부딪힘
 			return throughput * GetSkyColor(currentRay);
+			//return make_float3(1, 0, 0);
 		}
 	}
 
 	// 최대 바운스 도달
-	return make_float3(0, 0, 0);
+	return throughput;
 }
 
 
@@ -293,15 +308,17 @@ __device__ float3 Reflect(const float3& v, const float3& n)
 
 __device__ bool LambertScatter(const CuRay& rayIn, const CuHitRecord& hitRecord, float3& attenuation, CuRay& scattered, curandState* state)
 {
-    float3 scatterDirection = hitRecord.mNormal + RandomUnitVector(state);
+    float3 scatterDirection = hitRecord.mNormal + RandomUnitVectorInHemisphere(hitRecord.mNormal, state);
     // Catch degenerate scatter direction
-    if (Dot(scatterDirection, scatterDirection) < 1e-8)
-    {
-        scatterDirection = hitRecord.mNormal;
-    }
+
+	if (fabs(scatterDirection.x) < 1e-4 && fabs(scatterDirection.y) < 1e-4 && fabs(scatterDirection.z) < 1e-4)
+	{
+		scatterDirection = hitRecord.mNormal;
+	}
+
     float3 offsetOrigin = hitRecord.mPoint + 0.001f * hitRecord.mNormal; // Offset to avoid self-intersection
     scattered = CuRay(offsetOrigin, Unit(scatterDirection));
-    attenuation = make_float3(1.0f, 1.0f, 1.0f); // Lambertian has no color attenuation
+    attenuation = make_float3(.90f, .90f, .90f); // Lambertian has no color attenuation
     return true;
 }
 
@@ -369,7 +386,7 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
 
 	CuSphere sphereWhite(make_float3(0.0f, -0.00f, -1.00f), 0.1f);
 	sphereWhite.mAlbedo = make_float3(0.9f, 0.9f, .90f);
-	sphereWhite.mMaterialType = MaterialType::METAL;
+	sphereWhite.mMaterialType = MaterialType::LAMBERTIAN;
 
     CuSphere sphereGreen(make_float3(0.20f, -0.00f, -1.00f), 0.1f);
 	sphereGreen.mAlbedo = make_float3(0.1f, 0.8f, 0.1f);
@@ -399,11 +416,11 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
 	dummyRay.mDir = Unit(upperLeft + u * horizontal - v * vertical);
 	CuRay cameraRay = mainCamera.GetRay(x, y);
 
-
 	CuRay r = cameraRay;
 
 	float3 currentFrameColor = RayColor(cameraRay, sphereWhite, sphereGreen, sphereRed, localState); // Get the color from the ray tracing function	
 
+	
 	float3 prevAccColor = make_float3(accum_red[id], accum_green[id], accum_blue[id]);
     float3 newAccumColor = prevAccColor + currentFrameColor;
     
