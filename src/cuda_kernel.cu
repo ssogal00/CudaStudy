@@ -129,7 +129,7 @@ __device__ float3 RayColor(const CuRay& ray,
 
 	// (기존 attenuation 변수는 루프 안으로 이동합니다)
 
-	for (int depth = 0; depth < 6; ++depth)
+	for (int depth = 0; depth < 10; ++depth)
 	{
 		CuHitRecord hitRecord;
 		CuHitRecord tempHitRecord;
@@ -314,7 +314,8 @@ __device__ float3 Reflect(const float3& v, const float3& n)
 
 __device__ bool LambertScatter(const CuRay& rayIn, const CuHitRecord& hitRecord, float3& attenuation, CuRay& scattered, curandState* state)
 {
-    float3 scatterDirection = hitRecord.mNormal + RandomUnitVectorInHemisphere(hitRecord.mNormal, state);
+	//float3 scatterDirection = RandomUnitVectorInHemisphere(hitRecord.mNormal, state);
+	float3 scatterDirection = Unit(hitRecord.mNormal + RandomUnitVectorInHemisphere(hitRecord.mNormal, state));
     // Catch degenerate scatter direction
 
 	if (fabs(scatterDirection.x) < 1e-4 && fabs(scatterDirection.y) < 1e-4 && fabs(scatterDirection.z) < 1e-4)
