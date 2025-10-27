@@ -11,7 +11,7 @@
 struct CuRay;
 
 #define M_PI (3.14159265358979323846)
-#define MAX_BOUNCES 5
+#define MAX_BOUNCES 10
 
 void check_cuda(cudaError_t result, char const* const func, const char* const file, int const line);
 

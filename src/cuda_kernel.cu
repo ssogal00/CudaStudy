@@ -1,13 +1,13 @@
 #include "cuda_kernel.cuh"
 #include <vector_functions.h> // 필요시 명시적 포함
 
-float* d_redValues;
-float* d_greenValues;
-float* d_blueValues;
-float* d_accum_red;
-float* d_accum_green;
-float* d_accum_blue;
-CuSphere** d_spheres;
+float* d_redValues = nullptr;
+float* d_greenValues=nullptr;
+float* d_blueValues=nullptr;
+float* d_accum_red=nullptr;
+float* d_accum_green=nullptr;
+float* d_accum_blue=nullptr;
+CuSphere** d_spheres=nullptr;
 
 curandState* d_randomState;
 
@@ -114,7 +114,7 @@ __device__ float3 GetRayHitColor(const CuRay& ray)
 
 
 __device__ float3 RayColor(const CuRay& ray,
-	CuSphere sphereWhite, CuSphere sphereGreen, CuSphere sphereRed,
+	CuSphere* sphereWhite, CuSphere* sphereGreen, CuSphere* sphereRed,
 	curandState* state)
 {
 	CuRay currentRay = ray;
@@ -124,6 +124,7 @@ __device__ float3 RayColor(const CuRay& ray,
 
 	// (기존 attenuation 변수는 루프 안으로 이동합니다)
 
+
 	for (int depth = 0; depth < MAX_BOUNCES; ++depth)
 	{
 		CuHitRecord hitRecord;
@@ -132,34 +133,28 @@ __device__ float3 RayColor(const CuRay& ray,
 		float closestSoFar = 10000.0f;
 
 		// 첫 번째 구체 검사
-		if (sphereWhite.Hit(currentRay, tempHitRecord, 0.001f, closestSoFar))
+		/*if (sphereWhite->Hit(currentRay, tempHitRecord, 0.001f, closestSoFar))
 		{
 			hitAnything = true;
 			closestSoFar = tempHitRecord.mT;
 			hitRecord = tempHitRecord;
-
-			// ★ 3. 버그 수정: 여기서 throughput을 곱하지 않습니다!
-		}
-
-		// 두 번째 구체 검사
-		if (sphereGreen.Hit(currentRay, tempHitRecord, 0.001f, closestSoFar))
-		{
-			hitAnything = true;
-			closestSoFar = tempHitRecord.mT;
-			hitRecord = tempHitRecord;
-
-			// ★ 3. 버그 수정: 여기서 throughput을 곱하지 않습니다!
 		}
 		
-		// 세번째 구체 검사
-		/*if (sphereRed.Hit(currentRay, tempHitRecord, 0.001f, closestSoFar))
+		// 두 번째 구체 검사
+		if (sphereGreen->Hit(currentRay, tempHitRecord, 0.001f, closestSoFar))
 		{
 			hitAnything = true;
 			closestSoFar = tempHitRecord.mT;
 			hitRecord = tempHitRecord;
-
-			// ★ 3. 버그 수정: 여기서 throughput을 곱하지 않습니다!
-		}*/
+		}
+		*/
+		// 세번째 구체 검사
+		if (sphereRed->Hit(currentRay, tempHitRecord, 0.001f, closestSoFar))
+		{
+			hitAnything = true;
+			closestSoFar = tempHitRecord.mT;
+			hitRecord = tempHitRecord;
+		}
 
 
 		if (hitAnything)
@@ -176,6 +171,7 @@ __device__ float3 RayColor(const CuRay& ray,
 				}
 				else
 				{
+					// 산란 실패 시 흡수(검은색)
 					return make_float3(0, 0, 0);
 				}
 			}
@@ -188,11 +184,13 @@ __device__ float3 RayColor(const CuRay& ray,
 				}
 				else
 				{
+					// 금속 반사가 표면 안쪽으로 들어갈 때 흡수
 					return make_float3(0, 0, 0);
 				}
 			}
 			else
 			{
+				// 알 수 없는 재질
 				return make_float3(0, 0, 0);
 			}
 		}
@@ -203,8 +201,8 @@ __device__ float3 RayColor(const CuRay& ray,
 		}
 	}
 
-	// 최대 바운스 도달
-	return make_float3(0, 0, 0);
+	// 최대 바운스 도달 - 에너지가 남아있으면 throughput 반환
+	return throughput;
 }
 
 
@@ -411,15 +409,19 @@ __global__ void renderSphereKernel
 	float3 horizontal = make_float3(4.0f, 0.0f, 0.0f);
 	float3 vertical = make_float3(0.0f, 2.0f, 0.0f);
 
-	float u = float(x) / float(width);
-	float v = float(y) / float(height);
+	float u = (float(x)) / float(width);
+	float v = (float(y)) / float(height);
 
-    CuRay dummyRay;
+	CuRay dummyRay;
 	dummyRay.mOrigin = make_float3(0.0f, CameraHeight, CameraDistance); // Camera position
 	dummyRay.mDir = Unit(upperLeft + u * horizontal - v * vertical);
 	CuRay cameraRay = mainCamera.GetRay(x, y);
+	
 
-	float3 currentFrameColor = RayColor(cameraRay, *d_spheres[0], *d_spheres[1], *d_spheres[2], localState); // Get the color from the ray tracing function	
+	float3 currentFrameColor = RayColor(cameraRay, d_spheres[0], d_spheres[1], d_spheres[2], localState); // Get the color from the ray tracing function	
+	//float3 currentFrameColor = d_spheres[2]->mAlbedo;//
+
+	// Accumulate color
 
 	float3 prevAccColor = make_float3(accum_red[id], accum_green[id], accum_blue[id]);
     float3 newAccumColor = prevAccColor + currentFrameColor;
@@ -428,7 +430,8 @@ __global__ void renderSphereKernel
     accum_green[id] = newAccumColor.y;
     accum_blue[id] = newAccumColor.z;
    
-    float3 finalAverageColor = newAccumColor / (float)frameCount;
+    float denom = (frameCount > 0) ? (float)frameCount : 1.0f;
+    float3 finalAverageColor = newAccumColor / denom;
 
     //
 	redValues[x + y * width] = finalAverageColor.x; // Assign the color to the pixel
@@ -551,15 +554,18 @@ void renderSphereCuda(float* redValues, float* greenValues, float* blueValues,
 		checkCudaErrors(cudaMalloc((void**)&d_spheres, 3 * sizeof(CuSphere*)));
 		checkCudaErrors(cudaMemset(d_spheres, 0, 3 * sizeof(CuSphere*)));
 		createSpheres << <1, 1 >> > (d_spheres);
+		checkCudaErrors(cudaDeviceSynchronize());
 	}
 
 	if (!d_randomState)
 	{
-		cudaMalloc((void**)&d_randomState, width * height * sizeof(curandState));
+		checkCudaErrors(cudaMalloc((void**)&d_randomState, width * height * sizeof(curandState)));
 	}
 
 	// Initialize RNG state (seed with frameCount for progressive changes)
 	SetupRandomState<<<dimGrid, dimBlock>>>(d_randomState, frameCount, width);
+	checkCudaErrors(cudaDeviceSynchronize());
+
 	
 	// Call kernel (ensure accumulators passed in correct order)
 	renderSphereKernel<<<dimGrid, dimBlock>>>(
@@ -569,8 +575,6 @@ void renderSphereCuda(float* redValues, float* greenValues, float* blueValues,
 		width, height, fCameraDistance, fCameraHeight, d_randomState, frameCount > 0 ? frameCount : 1ULL);
 
 	checkCudaErrors(cudaDeviceSynchronize());
-
-	
 
 	// Copy results back to host
 	checkCudaErrors(cudaMemcpy(redValues, d_redValues, width * height * sizeof(float), cudaMemcpyDeviceToHost));
