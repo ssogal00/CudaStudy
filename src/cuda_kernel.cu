@@ -122,10 +122,7 @@ __device__ float3 RayColor(const CuRay& ray,
 	// 1. 'throughput'이 광선이 누적하는 색상입니다.
 	float3 throughput = make_float3(1.0f, 1.0f, 1.0f);
 
-	// (기존 attenuation 변수는 루프 안으로 이동합니다)
-
-
-	for (int depth = 0; depth < MAX_BOUNCES; ++depth)
+	for (int depth = 0; depth < 2; ++depth)
 	{
 		CuHitRecord hitRecord;
 		CuHitRecord tempHitRecord;
@@ -133,7 +130,7 @@ __device__ float3 RayColor(const CuRay& ray,
 		float closestSoFar = 10000.0f;
 
 		// 첫 번째 구체 검사
-		/*if (sphereWhite->Hit(currentRay, tempHitRecord, 0.001f, closestSoFar))
+		if (sphereWhite->Hit(currentRay, tempHitRecord, 0.001f, closestSoFar))
 		{
 			hitAnything = true;
 			closestSoFar = tempHitRecord.mT;
@@ -147,7 +144,7 @@ __device__ float3 RayColor(const CuRay& ray,
 			closestSoFar = tempHitRecord.mT;
 			hitRecord = tempHitRecord;
 		}
-		*/
+		
 		// 세번째 구체 검사
 		if (sphereRed->Hit(currentRay, tempHitRecord, 0.001f, closestSoFar))
 		{
@@ -172,7 +169,7 @@ __device__ float3 RayColor(const CuRay& ray,
 				else
 				{
 					// 산란 실패 시 흡수(검은색)
-					return make_float3(0, 0, 0);
+					return make_float3(1, 0, 0);
 				}
 			}
 			else if (hitRecord.mMaterialType == METAL)
@@ -185,13 +182,13 @@ __device__ float3 RayColor(const CuRay& ray,
 				else
 				{
 					// 금속 반사가 표면 안쪽으로 들어갈 때 흡수
-					return make_float3(0, 0, 0);
+					return make_float3(1, 0, 0);
 				}
 			}
 			else
 			{
 				// 알 수 없는 재질
-				return make_float3(0, 0, 0);
+				return make_float3(1, 0, 0);
 			}
 		}
 		else
@@ -355,15 +352,15 @@ __global__ void createSpheres(CuSphere** d_spheres)
 {
 	if (threadIdx.x == 0 && blockIdx.x == 0)
 	{
-		d_spheres[0] = new CuSphere(make_float3(-0.20f, -0.00f, -1.00f), 0.1f);
+		d_spheres[0] = new CuSphere(make_float3(-0.250f, -0.00f, -1.00f), 0.1f);
 		d_spheres[0]->mAlbedo = make_float3(0.8f, 0.1f, 0.1f);
 		d_spheres[0]->mMaterialType = MaterialType::LAMBERTIAN;
 
 		d_spheres[1] = new CuSphere(make_float3(0.0f, -0.00f, -1.00f), 0.1f);
 		d_spheres[1]->mAlbedo = make_float3(0.9f, 0.9f, .90f);
-		d_spheres[1]->mMaterialType = MaterialType::METAL;
+		d_spheres[1]->mMaterialType = MaterialType::LAMBERTIAN;
 
-		d_spheres[2] = new CuSphere(make_float3(0.20f, -0.00f, -1.00f), 0.1f);
+		d_spheres[2] = new CuSphere(make_float3(0.250f, -0.00f, -1.00f), 0.1f);
 		d_spheres[2]->mAlbedo = make_float3(0.1f, 0.8f, 0.1f);
 		d_spheres[2]->mMaterialType = MaterialType::LAMBERTIAN;
 	}
@@ -382,18 +379,6 @@ __global__ void renderSphereKernel
 
     int id = y * width + x;
 	curandState* localState = &state[id];
-
-	CuSphere sphereRed(make_float3(-0.20f, -0.00f, -1.00f), 0.1f);
-	sphereRed.mAlbedo = make_float3(0.8f, 0.1f, 0.1f);
-	sphereRed.mMaterialType = MaterialType::LAMBERTIAN;
-
-	CuSphere sphereWhite(make_float3(0.0f, -0.00f, -1.00f), 0.1f);
-	sphereWhite.mAlbedo = make_float3(0.9f, 0.9f, .90f);
-	sphereWhite.mMaterialType = MaterialType::METAL;
-
-	CuSphere sphereGreen(make_float3(0.20f, -0.00f, -1.00f), 0.1f);
-	sphereGreen.mAlbedo = make_float3(0.1f, 0.8f, 0.1f);
-	sphereGreen.mMaterialType = MaterialType::LAMBERTIAN;
 
 	CuCamera mainCamera{
 		make_float3(CameraHeight, 0, CameraDistance), // Camera position
