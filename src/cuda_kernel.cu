@@ -65,6 +65,12 @@ __device__ bool CuSphere::Hit(const CuRay& ray, CuHitRecord& hitRecord, float tM
 
 	hitRecord.mPoint = ray.At(root);
 	hitRecord.mNormal = Unit(hitRecord.mPoint - mOrigin);
+
+	if (Dot(ray.mDir, hitRecord.mNormal) > 0.0f)
+	{
+		hitRecord.mNormal = -hitRecord.mNormal; // Invert normal for inside hits
+	}
+
 	hitRecord.mT = root;
 	hitRecord.mAlbedo = mAlbedo;
 	hitRecord.mMaterialType = mMaterialType;
@@ -123,12 +129,26 @@ __device__ float3 RayColor(const CuRay& ray,
 
 	// (기존 attenuation 변수는 루프 안으로 이동합니다)
 
-	for (int depth = 0; depth < 2; ++depth)
+	for (int depth = 0; depth < 6; ++depth)
 	{
 		CuHitRecord hitRecord;
 		CuHitRecord tempHitRecord;
 		bool hitAnything = false;
 		float closestSoFar = 10000.0f;
+
+		if (isnan(currentRay.mDir.x) ||
+			isnan(currentRay.mDir.y) ||
+			isnan(currentRay.mDir.z) ||
+			isnan(currentRay.mOrigin.x) ||
+			isnan(currentRay.mOrigin.y) ||
+			isnan(currentRay.mOrigin.z))
+		{
+			return make_float3(1, 0, 0);
+		}
+		if (isnan(throughput.x) || isnan(throughput.y) || isnan(throughput.z))
+		{
+			return make_float3(1, 0, 0);
+		}
 
 		// 첫 번째 구체 검사
 		if (sphereWhite.Hit(currentRay, tempHitRecord, 0.001f, closestSoFar))
@@ -159,26 +179,12 @@ __device__ float3 RayColor(const CuRay& ray,
 
 			// ★ 3. 버그 수정: 여기서 throughput을 곱하지 않습니다!
 		}
-
+		
 		if (hitAnything)
 		{
 			CuRay scattered;
 			float3 attenuation;
 
-			if (isnan(throughput.x) || isnan(throughput.y) || isnan(throughput.z)) 
-			{
-				return make_float3(1, 0, 0);
-			}
-
-			if (isnan(currentRay.mDir.x) || 
-				isnan(currentRay.mDir.y) || 
-				isnan(currentRay.mDir.z) || 
-				isnan(currentRay.mOrigin.x) ||
-				isnan(currentRay.mOrigin.y) ||
-				isnan(currentRay.mOrigin.z))
-			{
-				return make_float3(1, 0, 0);
-			}
 
 			if (hitRecord.mMaterialType == LAMBERTIAN)
 			{
@@ -317,7 +323,7 @@ __device__ bool LambertScatter(const CuRay& rayIn, const CuHitRecord& hitRecord,
 	}
 
     float3 offsetOrigin = hitRecord.mPoint + 0.001f * hitRecord.mNormal; // Offset to avoid self-intersection
-    scattered = CuRay(offsetOrigin, Unit(scatterDirection));
+    scattered = CuRay(offsetOrigin, (scatterDirection));
     attenuation = make_float3(.90f, .90f, .90f); // Lambertian has no color attenuation
     return true;
 }
