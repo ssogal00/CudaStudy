@@ -16,7 +16,8 @@ struct CuRay;
 enum MaterialType
 {
 	LAMBERTIAN,
-	METAL
+	METAL,
+	DIELECTRIC
 };
 
 __device__ inline float3 Unit(const float3& InValue);
@@ -146,8 +147,10 @@ private:
 };
 __device__ bool LambertScatter(const CuRay& rayIn, const CuHitRecord& hitRecord, float3& attenuation, CuRay& scattered, curandState* state);
 
-
 __device__ bool MetalScatter(const CuRay& rayIn, const CuHitRecord& hitRecord, float3& attenuation, CuRay& scattered, curandState* state);
+
+__device__ bool DielectricScatter(const CuRay& rayIn, const CuHitRecord& hitRecord, float3& attenuation, CuRay& scattered, curandState* state);
+
 
 __device__ inline float3 RandomUnitVectorInHemisphere(const float3& normal, curandState* state)
 {
@@ -166,78 +169,6 @@ __device__ __forceinline__ float3 GetSkyColor(const CuRay& ray)
 	return (1.0f - t) * make_float3(1.0f, 1.0f, 1.0f) + t * make_float3(0.5f, 0.7f, 1.0f);
 }
 
-__device__ __forceinline__ float3 RayColorV2(const CuRay& ray, CuSphere* sphereList, const int sphereNum, curandState* state)
-{
-	CuRay currentRay = ray;
-
-	// 1. 'throughput'이 광선이 누적하는 색상입니다.
-	float3 throughput = make_float3(1.0f, 1.0f, 1.0f);
-
-	// (기존 attenuation 변수는 루프 안으로 이동합니다)
-	for (int depth = 0; depth < MAX_BOUNCES; ++depth)
-	{
-		CuHitRecord hitRecord;
-		CuHitRecord tempHitRecord;
-		bool hitAnything = false;
-		float closestSoFar = 10000.0f;
-
-		for (int i = 0; i < sphereNum; ++i)
-		{
-			CuSphere& sphere = (sphereList[i]);
-			if (sphere.Hit(currentRay, tempHitRecord, 0.001f, closestSoFar))
-			{
-				hitAnything = true;
-				closestSoFar = tempHitRecord.mT;
-				hitRecord = tempHitRecord;
-
-				// ★ 3. 버그 수정: 여기서 throughput을 곱하지 않습니다!
-			}
-		}
-
-		if (hitAnything)
-		{
-			CuRay scattered;
-			float3 attenuation;
-
-			if (hitRecord.mMaterialType == LAMBERTIAN)
-			{
-				if (LambertScatter(currentRay, hitRecord, attenuation, scattered, state))
-				{
-					throughput = throughput * hitRecord.mAlbedo * attenuation;
-					currentRay = scattered;
-				}
-				else
-				{
-					return make_float3(1, 0, 0);
-				}
-			}
-			else if (hitRecord.mMaterialType == METAL)
-			{
-				if (MetalScatter(currentRay, hitRecord, attenuation, scattered, state))
-				{
-					throughput = throughput * hitRecord.mAlbedo;
-					currentRay = scattered;
-				}
-				else
-				{
-					return make_float3(1, 0, 0);
-				}
-			}
-			else
-			{
-				return make_float3(1, 0, 0);
-			}
-		}
-		else
-		{
-			// 5. 하늘에 부딪힘
-			return throughput * GetSkyColor(currentRay);
-		}
-	}
-
-	// 최대 바운스 도달
-	return make_float3(0.0f, .0f, 0.0f);
-}
 
 __device__ float3 RayColor(const CuRay& ray,
 	const CuSphere& sphereWhite, 

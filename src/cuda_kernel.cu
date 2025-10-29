@@ -111,6 +111,11 @@ __device__ float3 Unit(const float3& InValue)
 	return float3{ InValue.x / length, InValue.y / length, InValue.z / length };
 }
 
+__device__ float Length(const float3& v)
+{
+	return sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
+}
+
 __device__ float3 GetRayHitColor(const CuRay& ray)
 {
     
@@ -201,14 +206,19 @@ __device__ float3 RayColor(const CuRay& ray,
 				}
 				else
 				{
-					return throughput;
+					// return throughput;
+					return make_float3(0, 0, 0);
 				}
-				//LambertScatter(currentRay, hitRecord, attenuation, scattered, state);
-				
+			}
+			else if (hitRecord.mMaterialType == DIELECTRIC)
+			{
+				DielectricScatter(currentRay, hitRecord, attenuation, scattered, state);
+				throughput = throughput * attenuation;
+				currentRay = scattered;
 			}
 			else
 			{
-				return make_float3(1, 0, 0);
+				return make_float3(0, 0, 0);
 			}
 		}
 		else
@@ -220,7 +230,7 @@ __device__ float3 RayColor(const CuRay& ray,
 	}
 
 	// 최대 바운스 도달
-	return throughput;
+	return  make_float3(0, 0, 0);;
 }
 
 
@@ -308,6 +318,30 @@ __device__ float3 Reflect(const float3& v, const float3& n)
 	return Unit(v - 2 * Dot(v, n) * n);
 }
 
+__device__ float Schlick(float cosine, float ref_idx) 
+{
+	float r0 = (1.0f - ref_idx) / (1.0f + ref_idx);
+	r0 = r0 * r0;
+	return r0 + (1.0f - r0) * pow((1.0f - cosine), 5.0f);
+}
+
+__device__ bool Refract(const float3& v, const float3& n, float ni_over_nt, float3& refracted) 
+{
+	float3 uv = Unit(v);
+	float dt = Dot(uv, n);
+	float discriminant = 1.0f - ni_over_nt * ni_over_nt * (1 - dt * dt);
+
+	if (discriminant > 0) 
+	{
+		refracted = ni_over_nt * (uv - n * dt) - n * sqrt(discriminant);
+		return true;
+	}
+	else
+	{
+		return false;
+	}
+}
+
 __device__ bool LambertScatter(const CuRay& rayIn, const CuHitRecord& hitRecord, float3& attenuation, CuRay& scattered, curandState* state)
 {
 	//float3 scatterDirection = RandomUnitVectorInHemisphere(hitRecord.mNormal, state);
@@ -335,7 +369,45 @@ __device__ bool MetalScatter(const CuRay& rayIn, const CuHitRecord& hitRecord, f
     return (Dot(scattered.mDir, hitRecord.mNormal) > 0.0f);
 	
 }
+__device__ bool DielectricScatter(const CuRay& rayIn, const CuHitRecord& hitRecord, float3& attenuation, CuRay& scattered, curandState* state)
+{
+	float3 outward_normal;
+	float3 reflected = Reflect(rayIn.mDir, hitRecord.mNormal);
+	float ni_over_nt;
+	attenuation = make_float3(1.0, 1.0, 1.0);
+	float3 refracted;
+	float reflect_prob;
+	float cosine;
+	float ref_idx = 1.5f; // Index of refraction for glass
 
+	if (Dot(rayIn.mDir, hitRecord.mNormal) > 0.0f) 
+	{
+		outward_normal = -hitRecord.mNormal;
+		ni_over_nt = ref_idx;
+		cosine = Dot(rayIn.mDir, hitRecord.mNormal) / Length(rayIn.mDir);
+		cosine = sqrt(1.0f - ref_idx * ref_idx * (1 - cosine * cosine));
+	}
+	else 
+	{
+		outward_normal = hitRecord.mNormal;
+		ni_over_nt = 1.0f / ref_idx;
+		cosine = -Dot(rayIn.mDir, hitRecord.mNormal) / Length(rayIn.mDir);
+	}
+	if (Refract(rayIn.mDir, outward_normal, ni_over_nt, refracted))
+	{
+		reflect_prob = Schlick(cosine, ref_idx);
+	}
+	else
+	{
+		reflect_prob = 1.0f;
+	}
+	if (curand_uniform(state) < reflect_prob)
+		scattered = CuRay(hitRecord.mPoint, reflected);
+	else
+		scattered = CuRay(hitRecord.mPoint, refracted);
+
+	return true;
+}
 
 __global__ void add_arrays_kernel(const int *a, const int *b, int *c, int size) {
     int index = blockIdx.x * blockDim.x + threadIdx.x;
@@ -384,19 +456,19 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
     int id = y * width + x;
 	curandState* localState = &state[id];
 
-	CuSphere sphereRed(make_float3(-0.30f, -0.00f, -1.00f), 0.1f);
+	CuSphere sphereRed(make_float3(-0.210f, -0.00f, -1.00f), 0.1f);
 	sphereRed.mAlbedo = make_float3(0.8f, 0.1f, 0.1f);
-	sphereRed.mMaterialType = MaterialType::LAMBERTIAN;
+	sphereRed.mMaterialType = MaterialType::DIELECTRIC;
 
 	CuSphere sphereWhite(make_float3(0.0f, -0.00f, -1.00f), 0.1f);
-	sphereWhite.mAlbedo = make_float3(0.9f, 0.9f, .90f);
+	sphereWhite.mAlbedo = make_float3(1.f, 0.1f, .10f);
 	sphereWhite.mMaterialType = MaterialType::METAL;
 
-    CuSphere sphereGreen(make_float3(0.30f, -0.00f, -1.00f), 0.1f);
+    CuSphere sphereGreen(make_float3(0.210f, -0.00f, -1.00f), 0.1f);
 	sphereGreen.mAlbedo = make_float3(0.1f, 0.8f, 0.1f);
 	sphereGreen.mMaterialType = MaterialType::LAMBERTIAN;
 
-	CuSphere* spheres[] = { &sphereGreen , &sphereRed,  &sphereWhite};
+	CuSphere* spheres[] = { &sphereWhite ,&sphereGreen , &sphereRed};
 
 	CuCamera mainCamera{
 		make_float3(CameraHeight, 0, CameraDistance), // Camera position
@@ -415,7 +487,7 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
 	float u = float(x) / float(width);
 	float v = float(y) / float(height);
 
-    CuRay dummyRay;
+	CuRay dummyRay;
 	dummyRay.mOrigin = make_float3(0.0f, CameraHeight, CameraDistance); // Camera position
 	dummyRay.mDir = Unit(upperLeft + u * horizontal - v * vertical);
 	CuRay cameraRay = mainCamera.GetRay(x, y);
@@ -423,14 +495,28 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
 	CuRay r = cameraRay;
 
 	float3 currentFrameColor = RayColor(cameraRay, sphereWhite, sphereGreen, sphereRed, localState); // Get the color from the ray tracing function	
-
 	
+	/*for (int sample = 0; sample < 1; ++sample)
+	{
+		float u = float(x + curand_uniform(localState)) / float(width);
+		float v = float(y + curand_uniform(localState)) / float(height);
+		CuRay cameraRay = mainCamera.GetRay(u, v);
+
+		float3 currentFrameColor = RayColor(cameraRay, sphereWhite, sphereGreen, sphereRed, localState); // Get the color from the ray tracing function	
+
+		color = color + currentFrameColor;	
+	}
+
+	color = color / float(1); // Average the samples
+	*/
 	float3 prevAccColor = make_float3(accum_red[id], accum_green[id], accum_blue[id]);
-    float3 newAccumColor = prevAccColor + currentFrameColor;
-    
-    accum_red[id] = newAccumColor.x;
-    accum_green[id] = newAccumColor.y;
-    accum_blue[id] = newAccumColor.z;
+
+	float3 newAccumColor = prevAccColor + currentFrameColor;
+
+	accum_red[id] = newAccumColor.x;
+	accum_green[id] = newAccumColor.y;
+	accum_blue[id] = newAccumColor.z;
+	
    
     float3 finalAverageColor = newAccumColor / (float)frameCount;
 
@@ -438,8 +524,6 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
 	redValues[x + y * width] = finalAverageColor.x; // Assign the color to the pixel
     greenValues[x + y * width] = finalAverageColor.y; // Assign the color to the pixel
     blueValues[x + y * width] = finalAverageColor.z; // Assign the color to the pixel
-	
-
 }
 
 __global__ void SetupRandomState(curandState* state, unsigned long long seed, int width)
