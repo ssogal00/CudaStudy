@@ -458,10 +458,10 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
 
 	CuSphere sphereRed(make_float3(-0.210f, -0.00f, -1.00f), 0.1f);
 	sphereRed.mAlbedo = make_float3(0.8f, 0.1f, 0.1f);
-	sphereRed.mMaterialType = MaterialType::DIELECTRIC;
+	sphereRed.mMaterialType = MaterialType::LAMBERTIAN;
 
 	CuSphere sphereWhite(make_float3(0.0f, -0.00f, -1.00f), 0.1f);
-	sphereWhite.mAlbedo = make_float3(1.f, 0.1f, .10f);
+	sphereWhite.mAlbedo = make_float3(1.f, 1.f, 1.0f);
 	sphereWhite.mMaterialType = MaterialType::METAL;
 
     CuSphere sphereGreen(make_float3(0.210f, -0.00f, -1.00f), 0.1f);
