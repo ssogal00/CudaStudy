@@ -45,7 +45,7 @@ __device__ bool CuSphere::Hit(const CuRay& ray, CuHitRecord& hitRecord, float tM
 	float h = Dot(oc, ray.mDir);
     float c = Dot(oc, oc) - mRadius * mRadius;
 	float discriminant = h * h - a * c;
-
+	
     if (discriminant < 0)
     {
         return false;
@@ -70,10 +70,9 @@ __device__ bool CuSphere::Hit(const CuRay& ray, CuHitRecord& hitRecord, float tM
 	{
 		hitRecord.mNormal = -hitRecord.mNormal; // Invert normal for inside hits
 	}
-
-	hitRecord.mT = root;
 	hitRecord.mAlbedo = mAlbedo;
 	hitRecord.mMaterialType = mMaterialType;
+	hitRecord.mT = root;
 	return true;
 }
 
@@ -129,10 +128,9 @@ __device__ float3 RayColor(const CuRay& ray,
 
 	// (기존 attenuation 변수는 루프 안으로 이동합니다)
 
-	for (int depth = 0; depth < 2; ++depth)
+	for (int depth = 0; depth < 20; ++depth)
 	{
 		CuHitRecord hitRecord;
-		CuHitRecord tempHitRecord;
 		bool hitAnything = false;
 		float closestSoFar = 10000.0f;
 
@@ -143,39 +141,42 @@ __device__ float3 RayColor(const CuRay& ray,
 			isnan(currentRay.mOrigin.y) ||
 			isnan(currentRay.mOrigin.z))
 		{
-			return make_float3(1, 0, 0);
+			return make_float3(1, 1, 1);
 		}
 		if (isnan(throughput.x) || isnan(throughput.y) || isnan(throughput.z))
 		{
-			return make_float3(1, 0, 0);
+			return make_float3(1, 1, 1);
 		}
 
 		// 첫 번째 구체 검사
-		if (sphereWhite.Hit(currentRay, tempHitRecord, 0.001f, closestSoFar))
+		CuHitRecord tempHitRecord1;
+		if (sphereWhite.Hit(currentRay, tempHitRecord1, 0.001f, closestSoFar))
 		{
 			hitAnything = true;
-			closestSoFar = tempHitRecord.mT;
-			hitRecord = tempHitRecord;
+			closestSoFar = tempHitRecord1.mT;
+			hitRecord = tempHitRecord1;
 
 			// ★ 3. 버그 수정: 여기서 throughput을 곱하지 않습니다!
 		}
 
 		// 두 번째 구체 검사
-		if (sphereGreen.Hit(currentRay, tempHitRecord, 0.001f, closestSoFar))
+		CuHitRecord tempHitRecord2;
+		if (sphereGreen.Hit(currentRay, tempHitRecord2, 0.001f, closestSoFar))
 		{
 			hitAnything = true;
-			closestSoFar = tempHitRecord.mT;
-			hitRecord = tempHitRecord;
+			closestSoFar = tempHitRecord2.mT;
+			hitRecord = tempHitRecord2;
 
 			// ★ 3. 버그 수정: 여기서 throughput을 곱하지 않습니다!
 		}
 		
 		// 세번째 구체 검사
-		if (sphereRed.Hit(currentRay, tempHitRecord, 0.001f, closestSoFar))
+		CuHitRecord tempHitRecord3;
+		if (sphereRed.Hit(currentRay, tempHitRecord3, 0.001f, closestSoFar))
 		{
 			hitAnything = true;
-			closestSoFar = tempHitRecord.mT;
-			hitRecord = tempHitRecord;
+			closestSoFar = tempHitRecord3.mT;
+			hitRecord = tempHitRecord3;
 
 			// ★ 3. 버그 수정: 여기서 throughput을 곱하지 않습니다!
 		}
@@ -184,19 +185,12 @@ __device__ float3 RayColor(const CuRay& ray,
 		{
 			CuRay scattered;
 			float3 attenuation;
-
-
+			
 			if (hitRecord.mMaterialType == LAMBERTIAN)
 			{
-				if (LambertScatter(currentRay, hitRecord, attenuation, scattered, state))
-				{
-					throughput = throughput * attenuation;
-					currentRay = scattered;
-				}
-				else
-				{
-					return make_float3(1, 0, 0);
-				}
+				LambertScatter(currentRay, hitRecord, attenuation, scattered, state);
+				throughput = throughput * attenuation;
+				currentRay = scattered;
 			}
 			else if (hitRecord.mMaterialType == METAL)
 			{
@@ -207,8 +201,10 @@ __device__ float3 RayColor(const CuRay& ray,
 				}
 				else
 				{
-					return make_float3(1, 0, 0);
+					return throughput;
 				}
+				//LambertScatter(currentRay, hitRecord, attenuation, scattered, state);
+				
 			}
 			else
 			{
@@ -337,6 +333,7 @@ __device__ bool MetalScatter(const CuRay& rayIn, const CuHitRecord& hitRecord, f
     scattered = CuRay(offsetOrigin, reflected); 
 	attenuation = hitRecord.mAlbedo; // Metal takes on the color of its albedo
     return (Dot(scattered.mDir, hitRecord.mNormal) > 0.0f);
+	
 }
 
 
@@ -387,7 +384,7 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
     int id = y * width + x;
 	curandState* localState = &state[id];
 
-	CuSphere sphereRed(make_float3(-0.20f, -0.00f, -1.00f), 0.1f);
+	CuSphere sphereRed(make_float3(-0.30f, -0.00f, -1.00f), 0.1f);
 	sphereRed.mAlbedo = make_float3(0.8f, 0.1f, 0.1f);
 	sphereRed.mMaterialType = MaterialType::LAMBERTIAN;
 
@@ -395,7 +392,7 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
 	sphereWhite.mAlbedo = make_float3(0.9f, 0.9f, .90f);
 	sphereWhite.mMaterialType = MaterialType::METAL;
 
-    CuSphere sphereGreen(make_float3(0.20f, -0.00f, -1.00f), 0.1f);
+    CuSphere sphereGreen(make_float3(0.30f, -0.00f, -1.00f), 0.1f);
 	sphereGreen.mAlbedo = make_float3(0.1f, 0.8f, 0.1f);
 	sphereGreen.mMaterialType = MaterialType::LAMBERTIAN;
 
