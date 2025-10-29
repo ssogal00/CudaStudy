@@ -453,6 +453,11 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     int y = blockIdx.y * blockDim.y + threadIdx.y;
 
+	if (x >= width || y >= height)
+	{
+		return;
+	}
+
     int id = y * width + x;
 	curandState* localState = &state[id];
 
@@ -487,28 +492,30 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
 	float u = float(x) / float(width);
 	float v = float(y) / float(height);
 
-	CuRay dummyRay;
-	dummyRay.mOrigin = make_float3(0.0f, CameraHeight, CameraDistance); // Camera position
-	dummyRay.mDir = Unit(upperLeft + u * horizontal - v * vertical);
+
 	CuRay cameraRay = mainCamera.GetRay(x, y);
 
 	CuRay r = cameraRay;
+	
 
 	float3 currentFrameColor = RayColor(cameraRay, sphereWhite, sphereGreen, sphereRed, localState); // Get the color from the ray tracing function	
 	
-	/*for (int sample = 0; sample < 1; ++sample)
+	/*float3 color = make_float3(0.0f, 0.0f, 0.0f);
+	CuRay cameraRay;
+	float3 currentFrameColor = make_float3(0,0,0);
+	
+	//for (int sample = 0; sample < 1; ++sample)
 	{
-		float u = float(x + curand_uniform(localState)) / float(width);
-		float v = float(y + curand_uniform(localState)) / float(height);
-		CuRay cameraRay = mainCamera.GetRay(u, v);
-
-		float3 currentFrameColor = RayColor(cameraRay, sphereWhite, sphereGreen, sphereRed, localState); // Get the color from the ray tracing function	
+		float u = float(x) / float(width);
+		float v = float(y) / float(height);
+		
+		cameraRay = mainCamera.GetRay(u, v);
+		currentFrameColor = RayColor(cameraRay, sphereWhite, sphereGreen, sphereRed, localState); // Get the color from the ray tracing function	
 
 		color = color + currentFrameColor;	
 	}
-
-	color = color / float(1); // Average the samples
 	*/
+	
 	float3 prevAccColor = make_float3(accum_red[id], accum_green[id], accum_blue[id]);
 
 	float3 newAccumColor = prevAccColor + currentFrameColor;
