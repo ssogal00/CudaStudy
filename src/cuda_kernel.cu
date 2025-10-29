@@ -484,7 +484,7 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
     };
 
     mainCamera.Initialize();
-
+	
 	float u = float(x) / float(width);
 	float v = float(y) / float(height);
 
@@ -492,26 +492,24 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
 	CuRay cameraRay = mainCamera.GetRay(x, y);
 
 	CuRay r = cameraRay;
-	
 
 	float3 currentFrameColor = RayColor(cameraRay, sphereWhite, sphereGreen, sphereRed, localState); // Get the color from the ray tracing function	
 	
-	/*float3 color = make_float3(0.0f, 0.0f, 0.0f);
-	CuRay cameraRay;
-	float3 currentFrameColor = make_float3(0,0,0);
-	
-	//for (int sample = 0; sample < 1; ++sample)
+	/*const int samplesPerPixel = 1; // Number of samples per pixel for anti-aliasing
+	for (int sample = 0; sample < samplesPerPixel; ++sample)
 	{
+		float randU = curand_uniform(localState);
+		float randV = curand_uniform(localState);
 		float u = float(x) / float(width);
 		float v = float(y) / float(height);
 		
 		cameraRay = mainCamera.GetRay(u, v);
-		currentFrameColor = RayColor(cameraRay, sphereWhite, sphereGreen, sphereRed, localState); // Get the color from the ray tracing function	
-
-		color = color + currentFrameColor;	
+		color = color + RayColor(cameraRay, sphereWhite, sphereGreen, sphereRed, localState); // Get the color from the ray tracing function	
 	}
+
+	currentFrameColor = color / (float)samplesPerPixel;
 	*/
-	
+
 	float3 prevAccColor = make_float3(accum_red[id], accum_green[id], accum_blue[id]);
 
 	float3 newAccumColor = prevAccColor + currentFrameColor;
@@ -615,7 +613,7 @@ void renderRGBCuda(float* redValues, float* greenValues, int width, int height)
 void renderSphereCuda(float* redValues, float* greenValues, float* blueValues,
     int width, int height, float fCameraDistance, float fCameraHeight,unsigned long long frameCount)
 {
-	dim3 dimBlock(32, 32, 1);
+	dim3 dimBlock(16, 16, 1);
 	dim3 dimGrid((width + dimBlock.x - 1) / dimBlock.x, (height + dimBlock.y - 1) / dimBlock.y, 1);
 
 	// Allocate device buffers if not already allocated
