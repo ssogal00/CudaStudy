@@ -485,10 +485,6 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
 
     mainCamera.Initialize();
 
-	float3 upperLeft = make_float3(-2.0f, 1.0f, -1.0f);
-	float3 horizontal = make_float3(4.0f, 0.0f, 0.0f);
-	float3 vertical = make_float3(0.0f, 2.0f, 0.0f);
-
 	float u = float(x) / float(width);
 	float v = float(y) / float(height);
 
