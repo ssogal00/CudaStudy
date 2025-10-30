@@ -186,7 +186,8 @@ void renderRGBCuda(float* redValues, float* greenValues, int width, int height);
 
 void renderSphereCuda(
 	float* redValues, float* greenValues, float* blueValues, 
-	int width, int height, float fCameraDistance, float fCameraHeight, unsigned long long frameCount);
+	int width, int height, float fCameraDistance, float fCameraTheta, float fCameraAzimuth,
+	unsigned long long frameCount);
 
 extern float* d_redValues;
 extern float* d_greenValues;

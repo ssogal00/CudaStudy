@@ -12,6 +12,8 @@ curandState* d_randomState;
 
 unsigned long long FrameCount = 0;
 
+
+
 __device__ float3 CuRay::At(float t) const
 {
     float3 result;
@@ -78,11 +80,7 @@ __device__ bool CuSphere::Hit(const CuRay& ray, CuHitRecord& hitRecord, float tM
 
 __device__ CuRay CuCamera::GetRay(float u, float v) const
 {
-	//float3 dir = Unit(mUpperLeft + u * mHorizontal - v * mVertical);
-	//return CuRay(mOrigin, dir);
 
-	//float3 pixelSample = mPixel00 + mPixelDeltaU * u + mPixelDeltaV * v;
-	//return CuRay(mOrigin, Unit(pixelSample - mOrigin));
 
 	// u: 0.0 (왼쪽) ~ 1.0 (오른쪽)
 	// v: 0.0 (위쪽) ~ 1.0 (아래쪽)
@@ -100,24 +98,7 @@ __device__ CuRay CuCamera::GetRay(float u, float v) const
 
 __device__ void CuCamera::Initialize()
 {
-    /*double theta = mFOV * M_PI / 180.0f; // Convert FOV to radians
-    double h = tanf(theta / 2);
-    double viewportHeight = 2 * h * mFocalLength;
-    double viewportWidth = viewportHeight * mAspectRatio;
-
-    float3 vLookDir = Unit(mLookAt - mOrigin);
-    float3 vRight = Unit(Cross(vLookDir, mUp));
-    float3 vUp = Unit(Cross(vRight, vLookDir));
-
-	float3 viewportU = viewportWidth * vRight;
-	float3 viewportV = viewportHeight * (vUp);
-
-    mPixelDeltaU = viewportU / mImageWidth;
-    mPixelDeltaV = viewportV / mImageHeight;
-
-    float3 viewportUpperLeft = mOrigin + vLookDir * mFocalLength - (viewportU * 0.5f) - (viewportV * 0.5f);
-    mPixel00 = viewportUpperLeft + 0.5 * (mPixelDeltaU + mPixelDeltaV); // Center the pixel at the upper left corner
-	*/
+  
 
 	double theta = mFOV * M_PI / 180.0f; // Convert FOV to radians
 	double h = tanf(theta / 2);
@@ -481,9 +462,12 @@ __global__ void renderRGBCudaKernel(float* redValues, float* greenValues, int wi
     greenValues[x + y * width] = static_cast<float>(y) / height;
 }
 
-__global__ void renderSphereKernel(float* redValues, float* greenValues, float* blueValues, 
+__global__ void renderSphereKernel(
+	float* redValues, float* greenValues, float* blueValues, 
 	float* accum_red, float* accum_green, float* accum_blue,
-    int width, int height, float CameraDistance, float CameraHeight, curandState* state, 
+    int width, int height, 
+	float CameraDistance, float CameraTheta, float CameraAzimuth,
+	curandState* state, 
     unsigned long long frameCount)
 {
     int x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -497,23 +481,27 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
     int id = y * width + x;
 	curandState* localState = &state[id];
 
-	CuSphere sphereRed(make_float3(-0.210f, -0.00f, -1.00f), 0.1f);
+	CuSphere sphereRed(make_float3(-0.15f, -0.00f, .00f), 0.1f);
 	sphereRed.mAlbedo = make_float3(0.8f, 0.1f, 0.1f);
 	sphereRed.mMaterialType = MaterialType::LAMBERTIAN;
 
-	CuSphere sphereWhite(make_float3(0.0f, -0.00f, -1.00f), 0.1f);
+	CuSphere sphereWhite(make_float3(0.150f, -0.00f, .00f), 0.1f);
 	sphereWhite.mAlbedo = make_float3(1.f, 1.f, 1.0f);
 	sphereWhite.mMaterialType = MaterialType::METAL;
 
-    CuSphere sphereGreen(make_float3(0.210f, -100.100f, -1.00f), 100.f);
+    CuSphere sphereGreen(make_float3(0.210f, -100.100f, .00f), 100.f);
 	sphereGreen.mAlbedo = make_float3(0.8f, 0.8f, 0.1f);
 	sphereGreen.mMaterialType = MaterialType::LAMBERTIAN;
 
 	CuSphere* spheres[] = { &sphereWhite ,&sphereGreen , &sphereRed};
 
+	float fCameraX = CameraDistance * cosf(CameraTheta * (M_PI / 180.0f)) * cosf(CameraAzimuth * (M_PI / 180.0f));
+	float fCameraZ = CameraDistance * sinf(CameraTheta * (M_PI / 180.0f)) * cosf(CameraAzimuth * (M_PI / 180.0f));
+	float fCameraY = CameraDistance * sinf(CameraAzimuth * (M_PI / 180.0f));
+
 	CuCamera mainCamera{
-		make_float3(CameraHeight, 0, CameraDistance), // Camera position
-		make_float3(0.0f, 0.0f, -1.0f), // Look at point
+		make_float3(fCameraX, fCameraY, fCameraZ), // Camera position
+		make_float3(0.0f, 0.0f, 0.0f), // Look at point
 		make_float3(0.0f, 1.0f, 0.0f), // Up vector
 		60.0f, // Field of view
 		float(width) / float(height) // Aspect ratio
@@ -646,7 +634,8 @@ void renderRGBCuda(float* redValues, float* greenValues, int width, int height)
 }
 
 void renderSphereCuda(float* redValues, float* greenValues, float* blueValues,
-    int width, int height, float fCameraDistance, float fCameraHeight,unsigned long long frameCount)
+    int width, int height, float fCameraDistance, float fCameraTheta, float fCameraAzimuth,
+	unsigned long long frameCount)
 {
 	dim3 dimBlock(16, 16, 1);
 	dim3 dimGrid((width + dimBlock.x - 1) / dimBlock.x, (height + dimBlock.y - 1) / dimBlock.y, 1);
@@ -681,7 +670,8 @@ void renderSphereCuda(float* redValues, float* greenValues, float* blueValues,
 	renderSphereKernel<<<dimGrid, dimBlock>>>(
 		d_redValues, d_greenValues, d_blueValues,
 		d_accum_red, d_accum_green, d_accum_blue,
-		width, height, fCameraDistance, fCameraHeight, d_randomState, frameCount > 0 ? frameCount : 1ULL);
+		width, height, fCameraDistance, fCameraTheta, fCameraAzimuth, 
+		d_randomState, frameCount > 0 ? frameCount : 1ULL);
 
 	cudaDeviceSynchronize();
 

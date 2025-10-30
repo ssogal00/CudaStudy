@@ -14,8 +14,12 @@
 const int WIDTH = 1024;
 const int HEIGHT = 512;
 
-float CameraDistance = 0;
+float CameraDistance = 0.65;
+float CameraDistanceTarget = 0; 
 float CameraHeight = 0;
+
+float CameraTheta = 250;
+float CameraAzimuth = 25;
 
 void InitCudaBuffers(int width, int height)
 {
@@ -61,7 +65,8 @@ void ResetAccBufferAndFrameCount()
 
 void render(SDL_Renderer* renderer, float* rValues, float* gValues, float* bValues)
 {
-	renderSphereCuda(rValues, gValues, bValues, WIDTH, HEIGHT, CameraDistance, CameraHeight, FrameCount);
+	renderSphereCuda(rValues, gValues, bValues, WIDTH, HEIGHT, 
+        CameraDistance, CameraTheta, CameraAzimuth, FrameCount);
 
 	for (int y = 0; y < HEIGHT; ++y)
 	{
@@ -77,7 +82,13 @@ void render(SDL_Renderer* renderer, float* rValues, float* gValues, float* bValu
 		}
 	}
 }
-
+float easeInEaseOut(float source, float target, float alpha) 
+{
+    if (alpha < 0.0f) alpha = 0.0f;
+    if (alpha > 1.0f) alpha = 1.0f;
+    float eased_alpha = (1.0f - std::cos(alpha * static_cast<float>(M_PI))) / 2.0f;
+    return source + (target - source) * eased_alpha;
+}
 
 int main() 
 {
@@ -96,7 +107,7 @@ int main()
 
     // 윈도우 생성
     SDL_Window* window = SDL_CreateWindow(
-        "SDL2 Window",                  // 윈도우 제목
+        "CUDA Raytracing Example",                  // 윈도우 제목
         SDL_WINDOWPOS_UNDEFINED,        // 윈도우 x 위치
         SDL_WINDOWPOS_UNDEFINED,        // 윈도우 y 위치
         WIDTH,                            // 윈도우 너비
@@ -142,24 +153,35 @@ int main()
             {
                 if (event.key.keysym.sym == SDLK_UP)
                 {
-					CameraDistance -= 0.1f; // 카메라 거리를 줄여줍니다.
+					CameraDistance -= 0.01f; // 카메라 거리를 줄여줍니다.
                     ResetAccBufferAndFrameCount();
                 }
                 else if (event.key.keysym.sym == SDLK_DOWN)
                 {
-					CameraDistance += 0.1f; // 카메라 거리를 늘려줍니다.
+					CameraDistance += 0.01f; // 카메라 거리를 늘려줍니다.
+                    
                     ResetAccBufferAndFrameCount();
                 }
 				else if (event.key.keysym.sym == SDLK_LEFT)
 				{
-                    CameraHeight -= 0.1f;
+                    CameraTheta -= 5.f;
                     ResetAccBufferAndFrameCount();
 				}
                 else if (event.key.keysym.sym == SDLK_RIGHT)
                 {
-					CameraHeight += 0.1f;
+					CameraTheta += 5.f;
                     ResetAccBufferAndFrameCount();
                 }
+				else if (event.key.keysym.sym == SDLK_1)
+				{
+					CameraAzimuth += 5.f;
+					ResetAccBufferAndFrameCount();
+				}
+				else if (event.key.keysym.sym == SDLK_2)
+				{
+                    CameraAzimuth -= 5.f;
+					ResetAccBufferAndFrameCount();
+				}
             }
         }
 
@@ -172,12 +194,12 @@ int main()
 
 		render(renderer, PixelsR, PixelsG, PixelsB);
 
-        
-
+       
         auto end = std::chrono::steady_clock::now();
 
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
+      
         std::cout << "Rendered in " << duration << " ms\r" << std::flush;
 
         SDL_RenderPresent(renderer);
