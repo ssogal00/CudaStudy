@@ -81,13 +81,26 @@ __device__ CuRay CuCamera::GetRay(float u, float v) const
 	//float3 dir = Unit(mUpperLeft + u * mHorizontal - v * mVertical);
 	//return CuRay(mOrigin, dir);
 
-	float3 pixelSample = mPixel00 + mPixelDeltaU * u + mPixelDeltaV * v;
-	return CuRay(mOrigin, Unit(pixelSample - mOrigin));
+	//float3 pixelSample = mPixel00 + mPixelDeltaU * u + mPixelDeltaV * v;
+	//return CuRay(mOrigin, Unit(pixelSample - mOrigin));
+
+	// u: 0.0 (왼쪽) ~ 1.0 (오른쪽)
+	// v: 0.0 (위쪽) ~ 1.0 (아래쪽)
+
+	// mPixel00 : 뷰포트 상단 왼쪽 코너
+	// mPixelDeltaU : 뷰포트 전체 가로 벡터
+	// mPixelDeltaV : 뷰포트 전체 세로 벡터 (위쪽 방향)
+
+	// v가 0일 때 상단, 1일 때 하단이 되도록 mPixelDeltaV (위쪽 벡터)를 빼줌
+	float3 target = mPixel00 + mPixelDeltaU * u - mPixelDeltaV * v;
+
+	// 원점에서 목표 지점으로 향하는 광선 생성
+	return CuRay(mOrigin, Unit(target - mOrigin));
 }
 
 __device__ void CuCamera::Initialize()
 {
-    double theta = mFOV * M_PI / 180.0f; // Convert FOV to radians
+    /*double theta = mFOV * M_PI / 180.0f; // Convert FOV to radians
     double h = tanf(theta / 2);
     double viewportHeight = 2 * h * mFocalLength;
     double viewportWidth = viewportHeight * mAspectRatio;
@@ -104,6 +117,34 @@ __device__ void CuCamera::Initialize()
 
     float3 viewportUpperLeft = mOrigin + vLookDir * mFocalLength - (viewportU * 0.5f) - (viewportV * 0.5f);
     mPixel00 = viewportUpperLeft + 0.5 * (mPixelDeltaU + mPixelDeltaV); // Center the pixel at the upper left corner
+	*/
+
+	double theta = mFOV * M_PI / 180.0f; // Convert FOV to radians
+	double h = tanf(theta / 2);
+	double viewportHeight = 2 * h * mFocalLength;
+	double viewportWidth = viewportHeight * mAspectRatio;
+
+	float3 vLookDir = Unit(mLookAt - mOrigin);
+	float3 vRight = Unit(Cross(vLookDir, mUp));
+	float3 vUp = Unit(Cross(vRight, vLookDir)); // 카메라의 실제 '위쪽' 방향
+
+	// 뷰포트의 전체 크기를 나타내는 벡터
+	float3 viewportU = viewportWidth * vRight;   // 뷰포트의 전체 가로 벡터
+	float3 viewportV = viewportHeight * vUp;     // 뷰포트의 전체 세로 벡터 (위쪽 방향)
+
+	// 픽셀당 델타가 아닌, 뷰포트 전체 벡터를 저장
+	mPixelDeltaU = viewportU;
+	mPixelDeltaV = viewportV;
+
+	// 뷰포트의 중심 위치 계산
+	float3 viewportCenter = mOrigin + vLookDir * mFocalLength;
+
+	// 뷰포트의 '상단 왼쪽' 코너 위치 계산
+	// 중심에서 왼쪽으로 절반(viewportU * 0.5), 위쪽으로 절반(viewportV * 0.5) 이동
+	float3 viewportUpperLeft = viewportCenter - (viewportU * 0.5f) + (viewportV * 0.5f);
+
+	// 첫 픽셀 중심이 아닌, 뷰포트 상단 왼쪽 코너를 저장
+	mPixel00 = viewportUpperLeft;
 }
 __device__ float3 Unit(const float3& InValue)
 {
@@ -114,11 +155,6 @@ __device__ float3 Unit(const float3& InValue)
 __device__ float Length(const float3& v)
 {
 	return sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
-}
-
-__device__ float3 GetRayHitColor(const CuRay& ray)
-{
-    
 }
 
 
@@ -469,8 +505,8 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
 	sphereWhite.mAlbedo = make_float3(1.f, 1.f, 1.0f);
 	sphereWhite.mMaterialType = MaterialType::METAL;
 
-    CuSphere sphereGreen(make_float3(0.210f, -0.00f, -1.00f), 0.1f);
-	sphereGreen.mAlbedo = make_float3(0.1f, 0.8f, 0.1f);
+    CuSphere sphereGreen(make_float3(0.210f, -100.100f, -1.00f), 100.f);
+	sphereGreen.mAlbedo = make_float3(0.8f, 0.8f, 0.1f);
 	sphereGreen.mMaterialType = MaterialType::LAMBERTIAN;
 
 	CuSphere* spheres[] = { &sphereWhite ,&sphereGreen , &sphereRed};
@@ -491,24 +527,23 @@ __global__ void renderSphereKernel(float* redValues, float* greenValues, float* 
 
 	CuRay cameraRay = mainCamera.GetRay(x, y);
 
-	CuRay r = cameraRay;
-
 	float3 currentFrameColor = RayColor(cameraRay, sphereWhite, sphereGreen, sphereRed, localState); // Get the color from the ray tracing function	
 	
-	/*const int samplesPerPixel = 1; // Number of samples per pixel for anti-aliasing
+	float3 color = make_float3(0, 0, 0);
+
+	const int samplesPerPixel = 30; // Number of samples per pixel for anti-aliasing
 	for (int sample = 0; sample < samplesPerPixel; ++sample)
 	{
 		float randU = curand_uniform(localState);
 		float randV = curand_uniform(localState);
-		float u = float(x) / float(width);
-		float v = float(y) / float(height);
+		float u = float(x + randU) / float(width);
+		float v = float(y + randV) / float(height);
 		
 		cameraRay = mainCamera.GetRay(u, v);
 		color = color + RayColor(cameraRay, sphereWhite, sphereGreen, sphereRed, localState); // Get the color from the ray tracing function	
 	}
 
 	currentFrameColor = color / (float)samplesPerPixel;
-	*/
 
 	float3 prevAccColor = make_float3(accum_red[id], accum_green[id], accum_blue[id]);
 

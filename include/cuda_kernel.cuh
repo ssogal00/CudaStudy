@@ -167,6 +167,8 @@ __device__ __forceinline__ float3 GetSkyColor(const CuRay& ray)
 	float3 UnitVec = Unit(ray.mDir);
 	float t = 0.5f * (UnitVec.y + 1.0f);
 	return (1.0f - t) * make_float3(1.0f, 1.0f, 1.0f) + t * make_float3(0.5f, 0.7f, 1.0f);
+
+	//return (1.0f - t) * make_float3(0.50f, 0.70f, 1.0f) + t * make_float3(1.0f, 1.0f, 1.0f);
 }
 
 
