@@ -17,6 +17,10 @@ file(GLOB RIPPLE_SOURCES "ripple/*.cpp")
 file(GLOB RIPPLE_HEADERS "ripple/*.h")
 file(GLOB RIPPLE_CUFILES "ripple/*.cu"  "ripple/*.cuh")
 
+file(GLOB JULIA_SOURCES "julia/*.cpp")
+file(GLOB JULIA_HEADERS "julia/*.h")
+file(GLOB JULIA_CUFILES "julia/*.cu"  "julia/*.cuh")
+
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include ${SDL2_INCLUDE_DIRS})
 
@@ -26,11 +30,15 @@ add_executable(CUDARayTracing
 	${CUFILES}
 )
 
-
 add_executable(CUDARipple
 	${RIPPLE_SOURCES}
 	${RIPPLE_HEADERS}
 	${RIPPLE_CUFILES}
+)
+
+add_executable(CUDAJulia 
+	${JULIA_SOURCES} 	${JULIA_HEADERS}
+	${JULIA_CUFILES}
 )
 
 set_target_properties(CUDARayTracing PROPERTIES
