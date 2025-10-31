@@ -13,20 +13,31 @@ file(GLOB SOURCES "src/*.cpp")
 file(GLOB CUFILES "src/*.cu" "src/*.cuh")
 file(GLOB HEADERS "src/*.h")
 
+file(GLOB RIPPLE_SOURCES "ripple/*.cpp")
+file(GLOB RIPPLE_HEADERS "ripple/*.h")
+file(GLOB RIPPLE_CUFILES "ripple/*.cu"  "ripple/*.cuh")
+
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include ${SDL2_INCLUDE_DIRS})
 
-add_executable(CudaApp 
+add_executable(CUDARayTracing 
 	${SOURCES}
 	${HEADERS}
 	${CUFILES}
 )
 
-set_target_properties(CudaApp PROPERTIES
+
+add_executable(CUDARipple
+	${RIPPLE_SOURCES}
+	${RIPPLE_HEADERS}
+	${RIPPLE_CUFILES}
+)
+
+set_target_properties(CUDARayTracing PROPERTIES
     CUDA_SEPARABLE_COMPILATION ON
 )
 
-target_link_libraries(CudaApp 
+target_link_libraries(CUDARayTracing 
 ${CUDA_LIBRARIES}
 SDL2::SDL2-static 
 SDL2::SDL2main
