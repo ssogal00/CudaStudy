@@ -558,58 +558,6 @@ __global__ void SetupRandomState(curandState* state, unsigned long long seed, in
     curand_init(seed, id, 0, &state[id]);
 }
 
-__global__ void renderJuliaSetCudaKernel(uint32_t* pixels, int width, int height, float c_real, float c_imag, int max_iterations)
-{
-    int x = blockIdx.x * blockDim.x + threadIdx.x;
-    int y = blockIdx.y * blockDim.y + threadIdx.y;
-
-    if (x >= width || y >= height)
-    {
-        return;
-    }
-
-    int index = y * width + x;
-
-    float z_real = (x - width / 2.0) * 4.0 / width;
-    float z_imag = (y - height / 2.0) * 4.0 / height;
-
-    int iterations = 0;
-
-    while (z_real * z_real + z_imag * z_imag < 4 && iterations < max_iterations)
-    {
-        float temp = z_real * z_real - z_imag * z_imag + c_real;
-        z_imag = 2 * z_real * z_imag + c_imag;
-        z_real = temp;
-        iterations++;
-    }
-
-    if (iterations == max_iterations)
-    {
-        pixels[index] = 0;
-    }
-    else
-    {
-        pixels[index] = iterations * 255 / max_iterations;
-    }
-}
-
-void renderJuliaSetCuda(uint32_t* pixels, int width, int height, float C_Real, float C_Imag, int max_iterations)
-{
-    uint32_t* d_pixels;
-
-    cudaMalloc((void**)&d_pixels, width * height * sizeof(uint32_t));
-
-    dim3 threadsPerBlock(16, 16);
-    dim3 blocksPerGrid((width + threadsPerBlock.x - 1) / threadsPerBlock.x, (height + threadsPerBlock.y - 1) / threadsPerBlock.y);
-
-    renderJuliaSetCudaKernel <<<blocksPerGrid, threadsPerBlock >>> (d_pixels, width, height, C_Real, C_Imag, max_iterations);
-
-    cudaDeviceSynchronize();
-
-    cudaMemcpy(pixels, d_pixels, width * height * sizeof(uint32_t), cudaMemcpyDeviceToHost);
-
-    cudaFree(d_pixels);
-}
 
 void renderRGBCuda(float* redValues, float* greenValues, int width, int height)
 {

@@ -45,8 +45,30 @@ set_target_properties(CUDARayTracing PROPERTIES
     CUDA_SEPARABLE_COMPILATION ON
 )
 
+set_target_properties(CUDARipple PROPERTIES
+    CUDA_SEPARABLE_COMPILATION ON
+)
+
+set_target_properties(CUDAJulia PROPERTIES
+    CUDA_SEPARABLE_COMPILATION ON
+)
+
 target_link_libraries(CUDARayTracing 
 ${CUDA_LIBRARIES}
 SDL2::SDL2-static 
 SDL2::SDL2main
 )
+
+target_link_libraries(CUDAJulia 
+${CUDA_LIBRARIES}
+SDL2::SDL2-static 
+SDL2::SDL2main
+)
+
+
+target_link_libraries(CUDARipple 
+${CUDA_LIBRARIES}
+SDL2::SDL2-static 
+SDL2::SDL2main
+)
+

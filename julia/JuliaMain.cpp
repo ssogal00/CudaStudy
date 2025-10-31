@@ -11,8 +11,10 @@
 
 #include <iomanip>
 
+#include "Julia.h"
+
 const int WIDTH = 1024;
-const int HEIGHT = 512;
+const int HEIGHT = 1024;
 
 
 
@@ -56,9 +58,7 @@ int main()
     bool quit = false;
     SDL_Event event;
 
-	float* PixelsR = new float[WIDTH * HEIGHT];
-    float* PixelsG = new float[WIDTH * HEIGHT];
-	float* PixelsB = new float[WIDTH * HEIGHT];
+	uint32_t* JuliaColors = new uint32_t[WIDTH * HEIGHT];
 
     while (!quit) 
     {
@@ -73,6 +73,7 @@ int main()
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         SDL_RenderClear(renderer);
 
+        renderJuliaSetWithCuda(renderer, JuliaColors);
         
 
         SDL_RenderPresent(renderer);
