@@ -5,13 +5,14 @@
 #include "SDL2/SDL.h"
 #include "SDL2/SDL_render.h"
 
+#include "Synchronize.cuh"
 #include <cmath>
 #include <complex>
 #include <thread>
 
 #include <iomanip>
 
-const int WIDTH = 1024;
+const int WIDTH = 512;
 const int HEIGHT = 512;
 
 
@@ -56,9 +57,7 @@ int main()
     bool quit = false;
     SDL_Event event;
 
-	float* PixelsR = new float[WIDTH * HEIGHT];
-    float* PixelsG = new float[WIDTH * HEIGHT];
-	float* PixelsB = new float[WIDTH * HEIGHT];
+	uint32_t* Pixels = new uint32_t[WIDTH * HEIGHT];
 
     while (!quit) 
     {
@@ -73,7 +72,20 @@ int main()
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         SDL_RenderClear(renderer);
 
-        
+        //
+		render(Pixels, WIDTH, HEIGHT);
+
+        for (int y = 0; y < HEIGHT; ++y)
+        {
+            for (int x = 0; x < WIDTH; ++x)
+            {
+                uint32_t color = Pixels[y * WIDTH + x];                                
+
+                SDL_SetRenderDrawColor(renderer, 0, color, 0, 255);
+                SDL_RenderDrawPoint(renderer, x, y);
+            }
+        }
+
 
         SDL_RenderPresent(renderer);
     }
