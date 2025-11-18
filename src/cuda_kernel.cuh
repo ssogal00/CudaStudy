@@ -111,6 +111,30 @@ public:
 	__device__ bool Intersect(const CuRay& ray, float& t) const;	
 };
 
+struct CuCheckerTexture
+{
+public:
+	__device__ CuCheckerTexture(const float3& oddColor, const float3& evenColor)
+		: mOddColor{ oddColor }, mEvenColor{ evenColor }
+	{
+	}
+	__device__ float3 Value(const float3& point) const
+	{
+		float sines = sinf(10.0f * point.x) * sinf(10.0f * point.y) * sinf(10.0f * point.z);
+		if (sines < 0)
+		{
+			return mOddColor;
+		}
+		else
+		{
+			return mEvenColor;
+		}
+	}
+private:
+	float3 mOddColor;
+	float3 mEvenColor;
+};
+
 struct CuCamera
 {
 public:
