@@ -7,6 +7,7 @@ float* d_blueValues;
 float* d_accum_red;
 float* d_accum_green;
 float* d_accum_blue;
+CuSphere* d_spheres;
 
 curandState* d_randomState;
 
@@ -136,6 +137,94 @@ __device__ float3 Unit(const float3& InValue)
 __device__ float Length(const float3& v)
 {
 	return sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
+}
+
+__device__ float3 RayColor2(const CuRay& ray,
+	const CuSphere** spheres,
+	int sphereCount,
+	curandState* state)
+{
+	CuRay currentRay = ray;
+
+	// 1. 'throughput'이 광선이 누적하는 색상입니다.
+	float3 throughput = make_float3(1.0f, 1.0f, 1.0f);
+
+	for (int depth = 0; depth < 20; ++depth)
+	{
+		CuHitRecord hitRecord;
+		bool hitAnything = false;
+		float closestSoFar = 10000.0f;
+
+		if (isnan(currentRay.mDir.x) ||
+			isnan(currentRay.mDir.y) ||
+			isnan(currentRay.mDir.z) ||
+			isnan(currentRay.mOrigin.x) ||
+			isnan(currentRay.mOrigin.y) ||
+			isnan(currentRay.mOrigin.z))
+		{
+			return make_float3(1, 1, 1);
+		}
+		if (isnan(throughput.x) || isnan(throughput.y) || isnan(throughput.z))
+		{
+			return make_float3(1, 1, 1);
+		}
+
+		for (int i = 0; i < sphereCount; ++i)
+		{
+			CuHitRecord tempHitRecord;
+			if (spheres[i]->Hit(currentRay, tempHitRecord, 0.001f, closestSoFar))
+			{
+				hitAnything = true;
+				closestSoFar = tempHitRecord.mT;
+				hitRecord = tempHitRecord;
+			}
+		}
+
+		if (hitAnything)
+		{
+			CuRay scattered;
+			float3 attenuation;
+
+			if (hitRecord.mMaterialType == LAMBERTIAN)
+			{
+				LambertScatter(currentRay, hitRecord, attenuation, scattered, state);
+				throughput = throughput * attenuation;
+				currentRay = scattered;
+			}
+			else if (hitRecord.mMaterialType == METAL)
+			{
+				if (MetalScatter(currentRay, hitRecord, attenuation, scattered, state))
+				{
+					throughput = throughput * attenuation;
+					currentRay = scattered;
+				}
+				else
+				{
+					// return throughput;
+					return make_float3(0, 0, 0);
+				}
+			}
+			else if (hitRecord.mMaterialType == DIELECTRIC)
+			{
+				DielectricScatter(currentRay, hitRecord, attenuation, scattered, state);
+				throughput = throughput * attenuation;
+				currentRay = scattered;
+			}
+			else
+			{
+				return make_float3(0, 0, 0);
+			}
+		}
+		else
+		{
+			// 5. 하늘에 부딪힘
+			return throughput * GetSkyColor(currentRay);
+			//return make_float3(1, 0, 0);
+		}
+	}
+
+	// 최대 바운스 도달
+	return  make_float3(0, 0, 0);;
 }
 
 
@@ -493,7 +582,6 @@ __global__ void renderSphereKernel(
 	sphereGreen.mAlbedo = make_float3(0.8f, 0.8f, 0.1f);
 	sphereGreen.mMaterialType = MaterialType::LAMBERTIAN;
 
-	CuSphere* spheres[] = { &sphereWhite ,&sphereGreen , &sphereRed};
 
 	float fCameraX = CameraDistance * cosf(CameraTheta * (M_PI / 180.0f)) * cosf(CameraAzimuth * (M_PI / 180.0f));
 	float fCameraZ = CameraDistance * sinf(CameraTheta * (M_PI / 180.0f)) * cosf(CameraAzimuth * (M_PI / 180.0f));
@@ -558,6 +646,23 @@ __global__ void SetupRandomState(curandState* state, unsigned long long seed, in
     curand_init(seed, id, 0, &state[id]);
 }
 
+__global__ void createSpheres(CuSphere** d_spheres)
+{
+	if (threadIdx.x == 0 && blockIdx.x == 0)
+	{
+		d_spheres[0] = new CuSphere(make_float3(-0.15f, -0.00f, .00f), 0.1f);
+		d_spheres[0]->mAlbedo = make_float3(0.8f, 0.1f, 0.1f);
+		d_spheres[0]->mMaterialType = MaterialType::LAMBERTIAN;
+
+		d_spheres[1] = new CuSphere(make_float3(0.150f, -0.00f, .00f), 0.1f);
+		d_spheres[1]->mAlbedo = make_float3(1.f, 1.f, 1.0f);
+		d_spheres[1]->mMaterialType = MaterialType::METAL;
+
+		d_spheres[2] = new CuSphere(make_float3(0.210f, -100.100f, .00f), 100.f);
+		d_spheres[2]->mAlbedo = make_float3(0.8f, 0.8f, 0.1f);
+		d_spheres[2]->mMaterialType = MaterialType::LAMBERTIAN;
+	}
+}
 
 void renderRGBCuda(float* redValues, float* greenValues, int width, int height)
 {
@@ -605,6 +710,12 @@ void renderSphereCuda(float* redValues, float* greenValues, float* blueValues,
 		cudaMemset(d_accum_green, 0, width * height * sizeof(float));
 		cudaMemset(d_accum_blue, 0, width * height * sizeof(float));
 	}
+
+	/*if (!d_spheres)
+	{
+		cudaMalloc((void**)&d_spheres, 3 * sizeof(CuSphere*));
+		cudaMemset(d_spheres, 0, 3 * sizeof(CuSphere*));
+	}*/
 
 	if (!d_randomState)
 	{

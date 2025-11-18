@@ -202,6 +202,11 @@ __device__ float3 RayColor(const CuRay& ray,
 	const CuSphere& sphereRed,
 	curandState* state);
 
+__device__ float3 RayColor2(const CuRay& ray,
+	const CuSphere** spheres,
+	int sphereCount,
+	curandState* state);
+
 void add_arrays(const int *a, const int *b, int *c, int size);
 
 void renderJuliaSetCuda(uint32_t* pixels, int width, int height, float C_Real, float C_Imag, int max_iterations);
