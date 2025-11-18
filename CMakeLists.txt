@@ -11,7 +11,11 @@ find_package(SDL2 REQUIRED)
 
 file(GLOB SOURCES "src/*.cpp")
 file(GLOB CUFILES "src/*.cu" "src/*.cuh")
+file(GLOB CUHEADERS "src/*.cuh")
 file(GLOB HEADERS "src/*.h")
+
+source_group("CUDA\\Kernels" FILES ${CUFILES})
+source_group("CUDA\\Headers" FILES ${CUHEADERS})
 
 file(GLOB RIPPLE_SOURCES "ripple/*.cpp")
 file(GLOB RIPPLE_HEADERS "ripple/*.h")
@@ -20,6 +24,16 @@ file(GLOB RIPPLE_CUFILES "ripple/*.cu"  "ripple/*.cuh")
 file(GLOB JULIA_SOURCES "julia/*.cpp")
 file(GLOB JULIA_HEADERS "julia/*.h")
 file(GLOB JULIA_CUFILES "julia/*.cu"  "julia/*.cuh")
+
+
+#file(GLOB NBODY_SOURCES "nbody/*.cpp")
+#file(GLOB NBODY_HEADERS "nbody/*.h")
+#file(GLOB NBODY_CUFILES "nbody/*.cu"  "nbody/*.cuh")
+
+
+#file(GLOB BLUR_SOURCES "blur/*.cpp")
+#file(GLOB BLUR_HEADERS "blur/*.h")
+#file(GLOB BLUR_CUFILES "blur/*.cu"  "blur/*.cuh")
 
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include ${SDL2_INCLUDE_DIRS})
